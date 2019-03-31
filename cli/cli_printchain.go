@@ -1,13 +1,14 @@
-package main
+package cli
 
 import (
+	"blockchain_go/blockchain"
 	"fmt"
 	"strconv"
 )
 
 func (cli *CLI) printChain(nodeID string) {
-	bc := NewBlockchain(nodeID)
-	defer bc.db.Close()
+	bc := blockchain.NewBlockchain(nodeID)
+	defer bc.Close()
 
 	bci := bc.Iterator()
 
@@ -17,7 +18,7 @@ func (cli *CLI) printChain(nodeID string) {
 		fmt.Printf("============ Block %x ============\n", block.Hash)
 		fmt.Printf("Height: %d\n", block.Height)
 		fmt.Printf("Prev. block: %x\n", block.PrevBlockHash)
-		pow := NewProofOfWork(block)
+		pow := blockchain.NewProofOfWork(block)
 		fmt.Printf("PoW: %s\n\n", strconv.FormatBool(pow.Validate()))
 		for _, tx := range block.Transactions {
 			fmt.Println(tx)

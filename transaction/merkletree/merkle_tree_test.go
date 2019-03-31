@@ -1,4 +1,4 @@
-package main
+package merkletree
 
 import (
 	"encoding/hex"

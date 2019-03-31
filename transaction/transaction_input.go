@@ -1,6 +1,9 @@
-package main
+package transaction
 
-import "bytes"
+import (
+	"blockchain_go/utils"
+	"bytes"
+)
 
 // TXInput represents a transaction input
 type TXInput struct {
@@ -12,7 +15,7 @@ type TXInput struct {
 
 // UsesKey checks whether the address initiated the transaction
 func (in *TXInput) UsesKey(pubKeyHash []byte) bool {
-	lockingHash := HashPubKey(in.PubKey)
+	lockingHash := utils.HashPubKey(in.PubKey)
 
 	return bytes.Compare(lockingHash, pubKeyHash) == 0
 }

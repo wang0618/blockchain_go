@@ -1,9 +1,10 @@
-package main
+package blockchain
 
 import (
 	"encoding/hex"
 	"log"
 
+	"blockchain_go/transaction"
 	"github.com/boltdb/bolt"
 )
 
@@ -26,7 +27,7 @@ func (u UTXOSet) FindSpendableOutputs(pubkeyHash []byte, amount int) (int, map[s
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			txID := hex.EncodeToString(k)
-			outs := DeserializeOutputs(v)
+			outs := transaction.DeserializeOutputs(v)
 
 			for outIdx, out := range outs.Outputs {
 				if out.IsLockedWithKey(pubkeyHash) && accumulated < amount {
@@ -46,8 +47,8 @@ func (u UTXOSet) FindSpendableOutputs(pubkeyHash []byte, amount int) (int, map[s
 }
 
 // FindUTXO finds UTXO for a public key hash
-func (u UTXOSet) FindUTXO(pubKeyHash []byte) []TXOutput {
-	var UTXOs []TXOutput
+func (u UTXOSet) FindUTXO(pubKeyHash []byte) []transaction.TXOutput {
+	var UTXOs []transaction.TXOutput
 	db := u.Blockchain.db
 
 	err := db.View(func(tx *bolt.Tx) error {
@@ -55,7 +56,7 @@ func (u UTXOSet) FindUTXO(pubKeyHash []byte) []TXOutput {
 		c := b.Cursor()
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			outs := DeserializeOutputs(v)
+			outs := transaction.DeserializeOutputs(v)
 
 			for _, out := range outs.Outputs {
 				if out.IsLockedWithKey(pubKeyHash) {
@@ -149,9 +150,9 @@ func (u UTXOSet) Update(block *Block) {
 		for _, tx := range block.Transactions {
 			if tx.IsCoinbase() == false {
 				for _, vin := range tx.Vin {
-					updatedOuts := TXOutputs{}
+					updatedOuts := transaction.TXOutputs{}
 					outsBytes := b.Get(vin.Txid)
-					outs := DeserializeOutputs(outsBytes)
+					outs := transaction.DeserializeOutputs(outsBytes)
 
 					for outIdx, out := range outs.Outputs {
 						if outIdx != vin.Vout {
@@ -174,7 +175,7 @@ func (u UTXOSet) Update(block *Block) {
 				}
 			}
 
-			newOutputs := TXOutputs{}
+			newOutputs := transaction.TXOutputs{}
 			for _, out := range tx.Vout {
 				newOutputs.Outputs = append(newOutputs.Outputs, out)
 			}
