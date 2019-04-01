@@ -2,6 +2,7 @@ package cli
 
 import (
 	"blockchain_go/blockchain"
+	"blockchain_go/miner"
 	"blockchain_go/net"
 	"blockchain_go/transaction"
 	w "blockchain_go/wallet"
@@ -33,7 +34,7 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 		cbTx := transaction.NewCoinbaseTX(from, "")
 		txs := []*transaction.Transaction{cbTx, tx}
 
-		newBlock := bc.MineBlock(txs)
+		newBlock := miner.MineBlock(bc, txs)
 		UTXOSet.Update(newBlock)
 	} else {
 		net.SendTx(net.CenterNode, tx)

@@ -2,6 +2,7 @@ package net
 
 import (
 	"blockchain_go/blockchain"
+	"blockchain_go/miner"
 	"blockchain_go/transaction"
 	"bytes"
 	"encoding/gob"
@@ -54,7 +55,7 @@ type tx struct {
 	Transaction []byte
 }
 
-type verzion struct {
+type version struct {
 	Version    int
 	BestHeight int
 	AddrFrom   string
@@ -165,7 +166,7 @@ func SendTx(addr string, tnx *transaction.Transaction) {
 
 func sendVersion(addr string, bc *blockchain.Blockchain) {
 	bestHeight := bc.GetBestHeight()
-	payload := gobEncode(verzion{nodeVersion, bestHeight, nodeAddress})
+	payload := gobEncode(version{nodeVersion, bestHeight, nodeAddress})
 
 	request := append(commandToBytes("version"), payload...)
 
@@ -340,7 +341,7 @@ func handleTx(request []byte, bc *blockchain.Blockchain) {
 			cbTx := transaction.NewCoinbaseTX(miningAddress, "")
 			txs = append(txs, cbTx)
 
-			newBlock := bc.MineBlock(txs)
+			newBlock := miner.MineBlock(bc, txs)
 			UTXOSet := blockchain.UTXOSet{bc}
 			UTXOSet.Reindex()
 
@@ -366,7 +367,7 @@ func handleTx(request []byte, bc *blockchain.Blockchain) {
 
 func handleVersion(request []byte, bc *blockchain.Blockchain) {
 	var buff bytes.Buffer
-	var payload verzion
+	var payload version
 
 	buff.Write(request[commandLength:])
 	dec := gob.NewDecoder(&buff)
