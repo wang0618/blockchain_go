@@ -1,12 +1,11 @@
 package transaction
 
 import (
+	"blockchain_go/utils"
 	"bytes"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
-	"math/big"
 	"strings"
 
 	"encoding/gob"
@@ -55,6 +54,7 @@ func (tx *Transaction) Hash() []byte {
 }
 
 // Sign signs each input of a Transaction
+// 签名的数据：把TrimmedCopy交易的当前输入的PubKey字段设置为所引用的输出的PubKeyHash后的整个交易数据
 func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) {
 	if tx.IsCoinbase() {
 		return
@@ -111,6 +111,7 @@ func (tx Transaction) String() string {
 }
 
 // TrimmedCopy creates a trimmed copy of Transaction to be used in signing
+// 返回交易副本，其中所有输入的签名和PubKey字段为空
 func (tx *Transaction) TrimmedCopy() Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
@@ -142,32 +143,24 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	}
 
 	txCopy := tx.TrimmedCopy()
-	curve := elliptic.P256()
 
 	for inID, vin := range tx.Vin {
 		prevTx := prevTXs[hex.EncodeToString(vin.Txid)]
-		txCopy.Vin[inID].Signature = nil
-		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
+		refVoutPubKeyHash := prevTx.Vout[vin.Vout].PubKeyHash
 
-		r := big.Int{}
-		s := big.Int{}
-		sigLen := len(vin.Signature)
-		r.SetBytes(vin.Signature[:(sigLen / 2)])
-		s.SetBytes(vin.Signature[(sigLen / 2):])
-
-		x := big.Int{}
-		y := big.Int{}
-		keyLen := len(vin.PubKey)
-		x.SetBytes(vin.PubKey[:(keyLen / 2)])
-		y.SetBytes(vin.PubKey[(keyLen / 2):])
-
-		dataToVerify := fmt.Sprintf("%x\n", txCopy)
-
-		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
-		if ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) == false {
+		// 校验花费的比特币为vin.PubKey拥有
+		if !bytes.Equal(utils.HashPubKey(vin.PubKey), refVoutPubKeyHash) {
 			return false
 		}
+
+		txCopy.Vin[inID].Signature = nil
+		txCopy.Vin[inID].PubKey = refVoutPubKeyHash
+		dataToVerify := fmt.Sprintf("%x\n", txCopy)
 		txCopy.Vin[inID].PubKey = nil
+
+		if utils.SignatureCheck(vin.Signature, vin.PubKey, []byte(dataToVerify)) == false {
+			return false
+		}
 	}
 
 	return true

@@ -27,8 +27,8 @@ func NewBlock(transactions []*transaction.Transaction, prevBlockHash []byte, hei
 	return block
 }
 
-// NewGenesisBlock 返回硬编码的创世区块
-func NewGenesisBlock() *Block {
+// newGenesisBlock 返回硬编码的创世区块
+func newGenesisBlock() *Block {
 	const genesisCoinbaseData = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks"
 	const genesisCoinbaseAddress = "168C3RJbprmpnxNry49ftjWGfFGQTNeDsU"
 
