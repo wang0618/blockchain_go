@@ -15,7 +15,8 @@ import (
 
 const dbFile = "blockchain_%s.db"
 const blocksBucket = "blocks"
-const genesisCoinbaseData = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks"
+
+var bc Blockchain
 
 // Blockchain implements interactions with a DB
 type Blockchain struct {
@@ -23,78 +24,71 @@ type Blockchain struct {
 	db  *bolt.DB
 }
 
-// CreateBlockchain creates a new blockchain DB
-func CreateBlockchain(address, nodeID string) *Blockchain {
+// 首次运行时创建本地区块数据库
+// 可通过NODE_ID环境变量来制定不同的数据库文件
+func init() {
+	nodeID := os.Getenv("NODE_ID")
 	dbFile := fmt.Sprintf(dbFile, nodeID)
-	if dbExists(dbFile) {
-		fmt.Println("Blockchain already exists.")
-		os.Exit(1)
-	}
 
-	var tip []byte
-
-	cbtx := transaction.NewCoinbaseTX(address, genesisCoinbaseData)
-	genesis := NewGenesisBlock(cbtx)
+	dbExist := dbExists(dbFile)
 
 	db, err := bolt.Open(dbFile, 0600, nil)
 	if err != nil {
 		log.Panic(err)
 	}
 
-	err = db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucket([]byte(blocksBucket))
+	if dbExist {
+		// 数据库已存在，读取最顶端区块哈希
+
+		var tip []byte
+
+		err = db.Update(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte(blocksBucket))
+			tip = b.Get([]byte("l"))
+
+			return nil
+		})
 		if err != nil {
 			log.Panic(err)
 		}
 
-		err = b.Put(genesis.Hash, genesis.Serialize())
+		bc = Blockchain{tip, db}
+
+	} else {
+		// 数据库不存在，将创世区块存入数据库
+
+		genesis := NewGenesisBlock()
+
+		bc = Blockchain{genesis.Hash, db}
+
+		err = db.Update(func(tx *bolt.Tx) error {
+			b, err := tx.CreateBucket([]byte(blocksBucket))
+			if err != nil {
+				log.Panic(err)
+			}
+
+			err = b.Put(genesis.Hash, genesis.Serialize())
+			if err != nil {
+				log.Panic(err)
+			}
+
+			err = b.Put([]byte("l"), genesis.Hash)
+			if err != nil {
+				log.Panic(err)
+			}
+
+			return nil
+		})
 		if err != nil {
 			log.Panic(err)
 		}
 
-		err = b.Put([]byte("l"), genesis.Hash)
-		if err != nil {
-			log.Panic(err)
-		}
-		tip = genesis.Hash
-
-		return nil
-	})
-	if err != nil {
-		log.Panic(err)
+		UTXOSet := UTXOSet{&bc}
+		UTXOSet.Reindex()
 	}
-
-	bc := Blockchain{tip, db}
-
-	return &bc
 }
 
-// NewBlockchain creates a new Blockchain with genesis Block
-func NewBlockchain(nodeID string) *Blockchain {
-	dbFile := fmt.Sprintf(dbFile, nodeID)
-	if dbExists(dbFile) == false {
-		fmt.Println("No existing blockchain found. Create one first.")
-		os.Exit(1)
-	}
-
-	var tip []byte
-	db, err := bolt.Open(dbFile, 0600, nil)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	err = db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(blocksBucket))
-		tip = b.Get([]byte("l"))
-
-		return nil
-	})
-	if err != nil {
-		log.Panic(err)
-	}
-
-	bc := Blockchain{tip, db}
-
+func GetBlockchain() *Blockchain {
 	return &bc
 }
 
@@ -174,8 +168,8 @@ func (bc *Blockchain) FindTransaction(ID []byte) (transaction.Transaction, error
 
 // FindUTXO finds all unspent transaction outputs and returns transactions with spent outputs removed
 func (bc *Blockchain) FindUTXO() map[string]transaction.TXOutputs {
-	UTXO := make(map[string]transaction.TXOutputs)
-	spentTXOs := make(map[string][]int)
+	UTXO := make(map[string]transaction.TXOutputs) // 交易ID -> 该交易的未花费的输出列表
+	spentTXOs := make(map[string][]int)            // 交易ID -> 该交易中已花费的交易索引列表
 	bci := bc.Iterator()
 
 	for {
@@ -284,6 +278,13 @@ func (bc *Blockchain) GetBlockHashes() [][]byte {
 	return blocks
 }
 
+// GetCurrentDifficult 返回当前区块链的挖矿难度值
+// 当前，挖矿难度值固定，和创世区块难度值一致
+// todo 参照比特币动态调整难度值
+func (bc *Blockchain) GetCurrentDifficult() []byte {
+	return NewGenesisBlock().Difficulty
+}
+
 // SignTransaction signs inputs of a Transaction
 func (bc *Blockchain) SignTransaction(tx *transaction.Transaction, privKey ecdsa.PrivateKey) {
 	prevTXs := make(map[string]transaction.Transaction)
@@ -300,6 +301,7 @@ func (bc *Blockchain) SignTransaction(tx *transaction.Transaction, privKey ecdsa
 }
 
 // VerifyTransaction verifies transaction input signatures
+// 仅校验了签名，没有检测是否双花
 func (bc *Blockchain) VerifyTransaction(tx *transaction.Transaction) bool {
 	if tx.IsCoinbase() {
 		return true

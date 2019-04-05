@@ -22,7 +22,7 @@ func MineBlock(bc *blockchain.Blockchain, transactions []*transaction.Transactio
 	lastHash = lastBlock.Hash
 	lastHeight = lastBlock.Height
 
-	newBlock := blockchain.NewBlock(transactions, lastHash, lastHeight+1)
+	newBlock := blockchain.NewBlock(transactions, lastHash, lastHeight+1, blockchain.GetBlockchain().GetCurrentDifficult())
 
 	pow := NewProofOfWork(newBlock)
 	nonce, hash := pow.Run()
