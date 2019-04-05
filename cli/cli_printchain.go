@@ -8,7 +8,7 @@ import (
 )
 
 func (cli *CLI) printChain(nodeID string) {
-	bc := blockchain.NewBlockchain(nodeID)
+	bc := blockchain.GetBlockchain()
 	defer bc.Close()
 
 	bci := bc.Iterator()
@@ -20,7 +20,8 @@ func (cli *CLI) printChain(nodeID string) {
 		fmt.Printf("Height: %d\n", block.Height)
 		fmt.Printf("Prev. block: %x\n", block.PrevBlockHash)
 		pow := miner.NewProofOfWork(block)
-		fmt.Printf("PoW: %s\n\n", strconv.FormatBool(pow.Validate()))
+		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
+		fmt.Printf("Difficulty: %x\n\n", block.Difficulty)
 		for _, tx := range block.Transactions {
 			fmt.Println(tx)
 		}

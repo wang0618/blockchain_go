@@ -431,7 +431,7 @@ func StartServer(nodeID, minerAddress string) {
 	}
 	defer ln.Close()
 
-	bc := blockchain.NewBlockchain(nodeID)
+	bc := blockchain.GetBlockchain()
 
 	if nodeAddress != knownNodes[0] {
 		sendVersion(knownNodes[0], bc)

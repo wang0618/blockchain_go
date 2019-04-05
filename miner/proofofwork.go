@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"time"
 
 	"blockchain_go/blockchain"
 )
@@ -14,8 +15,6 @@ import (
 var (
 	maxNonce = math.MaxInt64
 )
-
-const targetBits = 16
 
 // ProofOfWork represents a proof-of-work
 type ProofOfWork struct {
@@ -25,10 +24,10 @@ type ProofOfWork struct {
 
 // NewProofOfWork builds and returns a ProofOfWork
 func NewProofOfWork(b *blockchain.Block) *ProofOfWork {
-	target := big.NewInt(1)
-	target.Lsh(target, uint(256-targetBits))
+	var target big.Int
+	target.SetBytes(b.Difficulty)
 
-	pow := &ProofOfWork{b, target}
+	pow := &ProofOfWork{b, &target}
 
 	return pow
 }
@@ -39,7 +38,7 @@ func (pow *ProofOfWork) prepareData(nonce int) []byte {
 			pow.block.PrevBlockHash,
 			pow.block.HashTransactions(),
 			utils.IntToHex(pow.block.Timestamp),
-			utils.IntToHex(int64(targetBits)),
+			pow.block.Difficulty,
 			utils.IntToHex(int64(nonce)),
 		},
 		[]byte{},
@@ -54,14 +53,15 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 	var hash [32]byte
 	nonce := 0
 
-	fmt.Printf("Mining a new block")
+	fmt.Printf("Mining a new block\n")
+	start_ts := time.Now().Unix()
 	for nonce < maxNonce {
 		data := pow.prepareData(nonce)
 
 		hash = sha256.Sum256(data)
-		if math.Remainder(float64(nonce), 100000) == 0 {
-			fmt.Printf("\r%x", hash)
-		}
+		//if math.Remainder(float64(nonce), 100000) == 0 {
+		//	fmt.Printf("\r%x", hash)
+		//}
 		hashInt.SetBytes(hash[:])
 
 		if hashInt.Cmp(pow.target) == -1 {
@@ -70,7 +70,7 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 			nonce++
 		}
 	}
-	fmt.Print("\n\n")
+	fmt.Printf("%d seconds elapse for PoW\n", time.Now().Unix()-start_ts)
 
 	return nonce, hash[:]
 }
