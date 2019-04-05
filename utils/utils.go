@@ -2,10 +2,13 @@ package utils
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/binary"
 	"golang.org/x/crypto/ripemd160"
 	"log"
+	"math/big"
 )
 
 // IntToHex converts an int64 to a byte array
@@ -38,4 +41,25 @@ func HashPubKey(pubKey []byte) []byte {
 	publicRIPEMD160 := RIPEMD160Hasher.Sum(nil)
 
 	return publicRIPEMD160
+}
+
+// SignatureCheck 通过签名和公钥校验数据合法性
+func SignatureCheck(signature, pubey, dataToVerify []byte) bool {
+	r := big.Int{}
+	s := big.Int{}
+	sigLen := len(signature)
+	r.SetBytes(signature[:(sigLen / 2)])
+	s.SetBytes(signature[(sigLen / 2):])
+
+	x := big.Int{}
+	y := big.Int{}
+	keyLen := len(pubey)
+	x.SetBytes(pubey[:(keyLen / 2)])
+	y.SetBytes(pubey[(keyLen / 2):])
+
+	rawPubKey := ecdsa.PublicKey{Curve: elliptic.P256(), X: &x, Y: &y}
+	if ecdsa.Verify(&rawPubKey, dataToVerify, &r, &s) == false {
+		return false
+	}
+	return true
 }

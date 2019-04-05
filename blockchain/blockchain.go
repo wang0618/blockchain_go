@@ -57,7 +57,7 @@ func init() {
 	} else {
 		// 数据库不存在，将创世区块存入数据库
 
-		genesis := NewGenesisBlock()
+		genesis := newGenesisBlock()
 
 		bc = Blockchain{genesis.Hash, db}
 
@@ -167,9 +167,9 @@ func (bc *Blockchain) FindTransaction(ID []byte) (transaction.Transaction, error
 }
 
 // FindUTXO finds all unspent transaction outputs and returns transactions with spent outputs removed
-func (bc *Blockchain) FindUTXO() map[string]transaction.TXOutputs {
-	UTXO := make(map[string]transaction.TXOutputs) // 交易ID -> 该交易的未花费的输出列表
-	spentTXOs := make(map[string][]int)            // 交易ID -> 该交易中已花费的交易索引列表
+func (bc *Blockchain) findUTXO() map[string][]UTXOItem {
+	UTXOs := make(map[string][]UTXOItem)       // txID ->  UTXO slice
+	spentTXOs := make(map[string]map[int]bool) // txID ->  map(output_idx -> is_spent)
 	bci := bc.Iterator()
 
 	for {
@@ -178,26 +178,22 @@ func (bc *Blockchain) FindUTXO() map[string]transaction.TXOutputs {
 		for _, tx := range block.Transactions {
 			txID := hex.EncodeToString(tx.ID)
 
-		Outputs:
 			for outIdx, out := range tx.Vout {
 				// Was the output spent?
-				if spentTXOs[txID] != nil {
-					for _, spentOutIdx := range spentTXOs[txID] {
-						if spentOutIdx == outIdx {
-							continue Outputs
-						}
-					}
+				if spentTXOs[txID] != nil && spentTXOs[txID][outIdx] {
+					continue
 				}
 
-				outs := UTXO[txID]
-				outs.Outputs = append(outs.Outputs, out)
-				UTXO[txID] = outs
+				UTXOs[txID] = append(UTXOs[txID], UTXOItem{outIdx, out})
 			}
 
 			if tx.IsCoinbase() == false {
 				for _, in := range tx.Vin {
 					inTxID := hex.EncodeToString(in.Txid)
-					spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
+					if spentTXOs[inTxID] == nil {
+						spentTXOs[inTxID] = map[int]bool{}
+					}
+					spentTXOs[inTxID][in.Vout] = true
 				}
 			}
 		}
@@ -207,7 +203,7 @@ func (bc *Blockchain) FindUTXO() map[string]transaction.TXOutputs {
 		}
 	}
 
-	return UTXO
+	return UTXOs
 }
 
 // Iterator returns a BlockchainIterat
@@ -282,7 +278,7 @@ func (bc *Blockchain) GetBlockHashes() [][]byte {
 // 当前，挖矿难度值固定，和创世区块难度值一致
 // todo 参照比特币动态调整难度值
 func (bc *Blockchain) GetCurrentDifficult() []byte {
-	return NewGenesisBlock().Difficulty
+	return newGenesisBlock().Difficulty
 }
 
 // SignTransaction signs inputs of a Transaction

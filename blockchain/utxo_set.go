@@ -1,6 +1,8 @@
 package blockchain
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/hex"
 	"log"
 
@@ -10,12 +12,45 @@ import (
 
 const utxoBucket = "chainstate"
 
+// UTXO represents an unspent output from a transaction
+type UTXOItem struct {
+	Idx int
+	transaction.TXOutput
+}
+
+// SerializeUTXOItems serializes UTXOItem slice
+func SerializeUTXOItems(UTXOs []UTXOItem) []byte {
+	var buff bytes.Buffer
+
+	enc := gob.NewEncoder(&buff)
+	err := enc.Encode(UTXOs)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return buff.Bytes()
+}
+
+// DeserializeUTXOItems deserializes UTXOItem slice
+func DeserializeUTXOItems(data []byte) []UTXOItem {
+	var outputs []UTXOItem
+
+	dec := gob.NewDecoder(bytes.NewReader(data))
+	err := dec.Decode(&outputs)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return outputs
+}
+
 // UTXOSet represents UTXO set
 type UTXOSet struct {
 	Blockchain *Blockchain
 }
 
 // FindSpendableOutputs finds and returns unspent outputs to reference in inputs
+// BUG(wangweimin):
 func (u UTXOSet) FindSpendableOutputs(pubkeyHash []byte, amount int) (int, map[string][]int) {
 	unspentOutputs := make(map[string][]int)
 	accumulated := 0
@@ -27,12 +62,16 @@ func (u UTXOSet) FindSpendableOutputs(pubkeyHash []byte, amount int) (int, map[s
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			txID := hex.EncodeToString(k)
-			outs := transaction.DeserializeOutputs(v)
+			UTXOItems := DeserializeUTXOItems(v)
 
-			for outIdx, out := range outs.Outputs {
-				if out.IsLockedWithKey(pubkeyHash) && accumulated < amount {
-					accumulated += out.Value
-					unspentOutputs[txID] = append(unspentOutputs[txID], outIdx)
+			for _, UTXO := range UTXOItems {
+				if UTXO.IsLockedWithKey(pubkeyHash) {
+					if accumulated >= amount {
+						return nil
+					}
+
+					accumulated += UTXO.Value
+					unspentOutputs[txID] = append(unspentOutputs[txID], UTXO.Idx)
 				}
 			}
 		}
@@ -56,11 +95,11 @@ func (u UTXOSet) FindUTXO(pubKeyHash []byte) []transaction.TXOutput {
 		c := b.Cursor()
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			outs := transaction.DeserializeOutputs(v)
+			UTXOItems := DeserializeUTXOItems(v)
 
-			for _, out := range outs.Outputs {
-				if out.IsLockedWithKey(pubKeyHash) {
-					UTXOs = append(UTXOs, out)
+			for _, UTXO := range UTXOItems {
+				if UTXO.IsLockedWithKey(pubKeyHash) {
+					UTXOs = append(UTXOs, UTXO.TXOutput)
 				}
 			}
 		}
@@ -118,18 +157,18 @@ func (u UTXOSet) Reindex() {
 		log.Panic(err)
 	}
 
-	UTXO := u.Blockchain.FindUTXO()
+	UTXO := u.Blockchain.findUTXO()
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketName)
 
-		for txID, outs := range UTXO {
+		for txID, UTXOItems := range UTXO {
 			key, err := hex.DecodeString(txID)
 			if err != nil {
 				log.Panic(err)
 			}
 
-			err = b.Put(key, outs.Serialize())
+			err = b.Put(key, SerializeUTXOItems(UTXOItems))
 			if err != nil {
 				log.Panic(err)
 			}
@@ -150,23 +189,23 @@ func (u UTXOSet) Update(block *Block) {
 		for _, tx := range block.Transactions {
 			if tx.IsCoinbase() == false {
 				for _, vin := range tx.Vin {
-					updatedOuts := transaction.TXOutputs{}
+					var updatedOuts []UTXOItem
 					outsBytes := b.Get(vin.Txid)
-					outs := transaction.DeserializeOutputs(outsBytes)
+					outs := DeserializeUTXOItems(outsBytes)
 
-					for outIdx, out := range outs.Outputs {
-						if outIdx != vin.Vout {
-							updatedOuts.Outputs = append(updatedOuts.Outputs, out)
+					for _, out := range outs {
+						if out.Idx != vin.Vout {
+							updatedOuts = append(updatedOuts, out)
 						}
 					}
 
-					if len(updatedOuts.Outputs) == 0 {
+					if len(updatedOuts) == 0 {
 						err := b.Delete(vin.Txid)
 						if err != nil {
 							log.Panic(err)
 						}
 					} else {
-						err := b.Put(vin.Txid, updatedOuts.Serialize())
+						err := b.Put(vin.Txid, SerializeUTXOItems(updatedOuts))
 						if err != nil {
 							log.Panic(err)
 						}
@@ -174,13 +213,12 @@ func (u UTXOSet) Update(block *Block) {
 
 				}
 			}
-
-			newOutputs := transaction.TXOutputs{}
-			for _, out := range tx.Vout {
-				newOutputs.Outputs = append(newOutputs.Outputs, out)
+			var newOutputs []UTXOItem
+			for idx, out := range tx.Vout {
+				newOutputs = append(newOutputs, UTXOItem{idx, out})
 			}
 
-			err := b.Put(tx.ID, newOutputs.Serialize())
+			err := b.Put(tx.ID, SerializeUTXOItems(newOutputs))
 			if err != nil {
 				log.Panic(err)
 			}
