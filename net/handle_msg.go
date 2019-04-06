@@ -5,27 +5,15 @@ import (
 	"blockchain_go/miner"
 	"blockchain_go/transaction"
 	"bytes"
-	"encoding/gob"
 	"encoding/hex"
 	"fmt"
-	"log"
 )
 
 // 正在下载中的区块hash列表
 var blocksInTransit = [][]byte{}
 var mempool = make(map[string]transaction.Transaction)
 
-func handleAddr(request []byte) {
-	var buff bytes.Buffer
-	var payload addr
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
-
+func (payload *addr) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 	knownNodes = append(knownNodes, payload.AddrList...)
 	fmt.Printf("There are %d known nodes now!\n", len(knownNodes))
 	requestBlocks()
@@ -41,29 +29,20 @@ version消息 "你好，我的区块高度是..."
  - 若本节点的区块链的高度小于发送节点，说明本节点有未接收的区块，需要向对等节点获取区块。
  - 若本节点的区块链的高度大于发送节点，则向消息来源节点发送version消息，表明对方节点有未接收的区块。
 */
-func handleVersion(request []byte, bc *blockchain.Blockchain) {
-	var buff bytes.Buffer
-	var payload version
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
+func (payload *version) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
 	myBestHeight := bc.GetBestHeight()
 	foreignerBestHeight := payload.BestHeight
 
 	if myBestHeight < foreignerBestHeight {
-		sendGetBlocks(payload.AddrFrom)
+		sendGetBlocks(fromAddr)
 	} else if myBestHeight > foreignerBestHeight {
-		sendVersion(payload.AddrFrom, bc)
+		sendVersion(fromAddr, bc)
 	}
 
-	// sendAddr(payload.AddrFrom)
-	if !nodeIsKnown(payload.AddrFrom) {
-		knownNodes = append(knownNodes, payload.AddrFrom)
+	// sendAddr(fromAddr)
+	if !nodeIsKnown(fromAddr) {
+		knownNodes = append(knownNodes, fromAddr)
 	}
 }
 
@@ -80,19 +59,10 @@ getblocks消息 "给我看看你有哪些区块"
 TODO:
 对方节点没有时，向其他节点获取或者退后区块获取
 */
-func handleGetBlocks(request []byte, bc *blockchain.Blockchain) {
-	var buff bytes.Buffer
-	var payload getblocks
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
+func (payload *getblocks) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
 	blocks := bc.GetBlockHashes()
-	sendInv(payload.AddrFrom, "block", blocks)
+	sendInv(fromAddr, "block", blocks)
 }
 
 /*
@@ -106,16 +76,7 @@ inv消息 "我有这些区块/交易"
 消息处理逻辑：
 比较本地有无相关区块或交易，没有则通过getdata消息获取相关数据。
 */
-func handleInv(request []byte, bc *blockchain.Blockchain) {
-	var buff bytes.Buffer
-	var payload inv
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
+func (payload *inv) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
 	fmt.Printf("Recevied inventory with %d %s\n", len(payload.Items), payload.Type)
 
@@ -123,7 +84,7 @@ func handleInv(request []byte, bc *blockchain.Blockchain) {
 		blocksInTransit = payload.Items
 
 		blockHash := payload.Items[0]
-		sendGetData(payload.AddrFrom, "block", blockHash)
+		sendGetData(fromAddr, "block", blockHash)
 
 		newInTransit := [][]byte{}
 		for _, b := range blocksInTransit {
@@ -138,7 +99,7 @@ func handleInv(request []byte, bc *blockchain.Blockchain) {
 		txID := payload.Items[0]
 
 		if mempool[hex.EncodeToString(txID)].ID == nil {
-			sendGetData(payload.AddrFrom, "tx", txID)
+			sendGetData(fromAddr, "tx", txID)
 		}
 	}
 }
@@ -153,16 +114,7 @@ getdata消息 "给我发一下某区块/交易"
 消息处理逻辑：
 消息处理逻辑：使用block或tx消息返回请求的块/交易
 */
-func handleGetData(request []byte, bc *blockchain.Blockchain) {
-	var buff bytes.Buffer
-	var payload getdata
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
+func (payload *getdata) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
 	if payload.Type == "block" {
 		block, err := bc.GetBlock([]byte(payload.ID))
@@ -170,14 +122,14 @@ func handleGetData(request []byte, bc *blockchain.Blockchain) {
 			return
 		}
 
-		sendBlock(payload.AddrFrom, &block)
+		sendBlock(fromAddr, &block)
 	}
 
 	if payload.Type == "tx" {
 		txID := hex.EncodeToString(payload.ID)
 		tx := mempool[txID]
 
-		SendTx(payload.AddrFrom, &tx)
+		SendTx(fromAddr, &tx)
 		// delete(mempool, txID)
 	}
 }
@@ -194,16 +146,7 @@ block消息 "给你区块数据"
 TODO：并非无条件信任，我们应该在将每个块加入到区块链之前对它们进行验证。
 TODO: 并非运行 UTXOSet.Reindex()， 而是应该使用 UTXOSet.Update(block)，因为如果区块链很大，它将需要很多时间来对整个 UTXO 集重新索引。
 */
-func handleBlock(request []byte, bc *blockchain.Blockchain) {
-	var buff bytes.Buffer
-	var payload block
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
+func (payload *block) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
 	blockData := payload.Block
 	block := blockchain.DeserializeBlock(blockData)
@@ -215,7 +158,7 @@ func handleBlock(request []byte, bc *blockchain.Blockchain) {
 
 	if len(blocksInTransit) > 0 {
 		blockHash := blocksInTransit[0]
-		sendGetData(payload.AddrFrom, "block", blockHash)
+		sendGetData(fromAddr, "block", blockHash)
 
 		blocksInTransit = blocksInTransit[1:]
 	} else {
@@ -237,16 +180,7 @@ tx消息 "给你交易数据"
 TODO: 在将交易放到内存池之前，对其进行验证
 TODO: orphan transactions 管理
 */
-func handleTx(request []byte, bc *blockchain.Blockchain) {
-	var buff bytes.Buffer
-	var payload tx
-
-	buff.Write(request[commandLength:])
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(&payload)
-	if err != nil {
-		log.Panic(err)
-	}
+func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
 	txData := payload.Transaction
 	tx := transaction.DeserializeTransaction(txData)
@@ -255,7 +189,7 @@ func handleTx(request []byte, bc *blockchain.Blockchain) {
 	if nodeAddress == knownNodes[0] {
 		// 中心节点向其他节点广播交易消息
 		for _, node := range knownNodes {
-			if node != nodeAddress && node != payload.AddFrom {
+			if node != nodeAddress && node != fromAddr {
 				sendInv(node, "tx", [][]byte{tx.ID})
 			}
 		}
