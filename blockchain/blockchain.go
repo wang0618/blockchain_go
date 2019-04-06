@@ -111,6 +111,7 @@ func (bc *Blockchain) LastBlockInfo() *Block {
 }
 
 // AddBlock saves the block into the blockchain
+// 注意，当前若添加的区块为游离区块，则在遍历区块链时会出现错误
 func (bc *Blockchain) AddBlock(block *Block) {
 	err := bc.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
@@ -166,7 +167,7 @@ func (bc *Blockchain) FindTransaction(ID []byte) (transaction.Transaction, error
 	return transaction.Transaction{}, errors.New("Transaction is not found")
 }
 
-// FindUTXO finds all unspent transaction outputs and returns transactions with spent outputs removed
+// FindUTXO 返回一个 txID -> []UTXO 的map
 func (bc *Blockchain) findUTXO() map[string][]UTXOItem {
 	UTXOs := make(map[string][]UTXOItem)       // txID ->  UTXO slice
 	spentTXOs := make(map[string]map[int]bool) // txID ->  map(output_idx -> is_spent)
@@ -256,7 +257,7 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 	return block, nil
 }
 
-// GetBlockHashes returns a list of hashes of all the blocks in the chain
+// GetBlockHashes 获取本地区块链哈希列表
 func (bc *Blockchain) GetBlockHashes() [][]byte {
 	var blocks [][]byte
 	bci := bc.Iterator()
