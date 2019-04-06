@@ -2,9 +2,9 @@ package net
 
 import (
 	"blockchain_go/blockchain"
+	"blockchain_go/log"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 )
 
@@ -21,10 +21,10 @@ func handleConnection(conn net.Conn, bc *blockchain.Blockchain) {
 	defer conn.Close()
 	request, err := ioutil.ReadAll(conn)
 	if err != nil {
-		log.Panic(err)
+		log.Net.Panic(err)
 	}
 	command := bytesToCommand(request[:commandLength])
-	fmt.Printf("Received %s command\n", command)
+	log.Net.Printf("Received %s command\n", command)
 
 	fromAddr := conn.RemoteAddr().String()
 	switch command {
@@ -57,7 +57,7 @@ func handleConnection(conn net.Conn, bc *blockchain.Blockchain) {
 		gobDecode(request[commandLength:], &msg)
 		msg.handleMsg(bc, fromAddr)
 	default:
-		fmt.Println("Unknown command!")
+		log.Net.Println("Unknown command!")
 	}
 }
 
@@ -68,7 +68,7 @@ func StartServer(nodeID, minerAddress string) {
 
 	ln, err := net.Listen(protocol, nodeAddress)
 	if err != nil {
-		log.Panic(err)
+		log.Net.Panic(err)
 	}
 	defer ln.Close()
 
@@ -81,7 +81,7 @@ func StartServer(nodeID, minerAddress string) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Panic(err)
+			log.Net.Panic(err)
 		}
 		go handleConnection(conn, bc)
 	}

@@ -2,11 +2,11 @@ package net
 
 import (
 	"blockchain_go/blockchain"
+	"blockchain_go/log"
 	"blockchain_go/miner"
 	"blockchain_go/transaction"
 	"bytes"
 	"encoding/hex"
-	"fmt"
 )
 
 // 正在下载中的区块hash列表
@@ -20,7 +20,7 @@ func requestBlocks() {
 }
 func (payload *addr) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 	knownNodes = append(knownNodes, payload.AddrList...)
-	fmt.Printf("There are %d known nodes now!\n", len(knownNodes))
+	log.Net.Printf("There are %d known nodes now!\n", len(knownNodes))
 	requestBlocks()
 }
 
@@ -83,7 +83,7 @@ inv消息 "我有这些区块/交易"
 */
 func (payload *inv) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
-	fmt.Printf("Recevied inventory with %d %s\n", len(payload.Items), payload.Type)
+	log.Net.Printf("Recevied inventory with %d %s\n", len(payload.Items), payload.Type)
 
 	if payload.Type == "block" {
 		blocksInTransit = payload.Items
@@ -156,10 +156,10 @@ func (payload *block) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 	blockData := payload.Block
 	block := blockchain.DeserializeBlock(blockData)
 
-	fmt.Println("Recevied a new block!")
+	log.Net.Println("Recevied a new block!")
 	bc.AddBlock(block)
 
-	fmt.Printf("Added block %x\n", block.Hash)
+	log.Net.Printf("Added block %x\n", block.Hash)
 
 	if len(blocksInTransit) > 0 {
 		blockHash := blocksInTransit[0]
@@ -212,7 +212,7 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 			}
 
 			if len(txs) == 0 {
-				fmt.Println("All transactions are invalid! Waiting for new ones...")
+				log.Net.Println("All transactions are invalid! Waiting for new ones...")
 				return
 			}
 
@@ -223,7 +223,7 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 			UTXOSet := blockchain.UTXOSet{bc}
 			UTXOSet.Reindex()
 
-			fmt.Println("New block is mined!")
+			log.Net.Println("New block is mined!")
 
 			for _, tx := range txs {
 				txID := hex.EncodeToString(tx.ID)

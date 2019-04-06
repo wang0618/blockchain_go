@@ -1,11 +1,11 @@
 package net
 
 import (
+	"blockchain_go/log"
 	"bytes"
 	"encoding/gob"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -31,7 +31,7 @@ func gobDecode(data []byte, e interface{}) {
 	dec := gob.NewDecoder(&buff)
 	err := dec.Decode(e)
 	if err != nil {
-		log.Panic(err)
+		log.Net.Panic(err)
 	}
 }
 
@@ -41,7 +41,7 @@ func gobEncode(data interface{}) []byte {
 	enc := gob.NewEncoder(&buff)
 	err := enc.Encode(data)
 	if err != nil {
-		log.Panic(err)
+		log.Net.Panic(err)
 	}
 
 	return buff.Bytes()
@@ -76,7 +76,7 @@ func extractCommand(request []byte) []byte {
 func sendData(addr string, data []byte) {
 	conn, err := net.Dial(protocol, addr)
 	if err != nil {
-		fmt.Printf("%s is not available\n", addr)
+		log.Net.Printf("%s is not available\n", addr)
 		var updatedNodes []string
 
 		for _, node := range knownNodes {
@@ -93,6 +93,6 @@ func sendData(addr string, data []byte) {
 
 	_, err = io.Copy(conn, bytes.NewReader(data))
 	if err != nil {
-		log.Panic(err)
+		log.Net.Panic(err)
 	}
 }
