@@ -13,6 +13,11 @@ import (
 var blocksInTransit = [][]byte{}
 var mempool = make(map[string]transaction.Transaction)
 
+func requestBlocks() {
+	for _, node := range knownNodes {
+		sendGetBlocks(node)
+	}
+}
 func (payload *addr) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 	knownNodes = append(knownNodes, payload.AddrList...)
 	fmt.Printf("There are %d known nodes now!\n", len(knownNodes))
