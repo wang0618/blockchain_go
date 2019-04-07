@@ -308,7 +308,8 @@ func (bc *Blockchain) SignTransaction(tx *transaction.Transaction, privKey ecdsa
 
 // VerifyTransaction verifies transaction input signatures
 // 仅校验了签名，没有检测是否双花
-func (bc *Blockchain) VerifyTransaction(tx *transaction.Transaction) bool {
+// TODO 失败时返回具体错误原因
+func (bc *Blockchain) VerifyTransactionSig(tx *transaction.Transaction) bool {
 	if tx.IsCoinbase() {
 		return true
 	}
@@ -323,7 +324,7 @@ func (bc *Blockchain) VerifyTransaction(tx *transaction.Transaction) bool {
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 	}
 
-	return tx.Verify(prevTXs)
+	return tx.VerifySig(prevTXs)
 }
 
 // VerifyTransaction verifies transaction input signatures

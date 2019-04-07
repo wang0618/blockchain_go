@@ -3,6 +3,7 @@ package net
 import (
 	"blockchain_go/blockchain"
 	"blockchain_go/transaction"
+	"blockchain_go/utils"
 )
 
 type version struct {
@@ -34,61 +35,88 @@ type inv struct {
 }
 
 type tx struct {
-	Transaction []byte
+	Transaction transaction.Transaction
 }
 
-func sendInv(address, kind string, items [][]byte) {
+type ping struct{}
+type pong struct{}
+
+func sendInv(address, kind string, items [][]byte) error {
 	inventory := inv{kind, items}
-	payload := gobEncode(inventory)
+	payload := utils.GobEncode(inventory)
 	request := append(commandToBytes("inv"), payload...)
 
-	sendData(address, request)
+	return sendData(address, request)
 }
 
-func sendGetBlocks(address string) {
-	payload := gobEncode(getblocks{})
+func sendGetBlocks(address string) error {
+	payload := utils.GobEncode(getblocks{})
 	request := append(commandToBytes("getblocks"), payload...)
 
-	sendData(address, request)
+	return sendData(address, request)
 }
 
-func sendGetData(address, kind string, id []byte) {
-	payload := gobEncode(getdata{kind, id})
+func sendGetData(address, kind string, id []byte) error {
+	payload := utils.GobEncode(getdata{kind, id})
 	request := append(commandToBytes("getdata"), payload...)
 
-	sendData(address, request)
+	return sendData(address, request)
 }
 
-func SendTx(addr string, tnx *transaction.Transaction) {
-	data := tx{tnx.Serialize()}
-	payload := gobEncode(data)
+func SendTx(addr string, tnx *transaction.Transaction) error {
+	data := tx{*tnx}
+	payload := utils.GobEncode(data)
 	request := append(commandToBytes("tx"), payload...)
 
-	sendData(addr, request)
+	return sendData(addr, request)
 }
 
-func sendVersion(addr string, bc *blockchain.Blockchain) {
+func sendVersion(addr string, bc *blockchain.Blockchain) error {
 	bestHeight := bc.GetBestHeight()
-	payload := gobEncode(version{nodeVersion, bestHeight})
+	payload := utils.GobEncode(version{nodeVersion, bestHeight})
 
 	request := append(commandToBytes("version"), payload...)
 
-	sendData(addr, request)
+	return sendData(addr, request)
 }
 
-func sendAddr(address string) {
-	nodes := addr{knownNodes}
-	nodes.AddrList = append(nodes.AddrList)
-	payload := gobEncode(nodes)
+func sendAddr(address string) error {
+	addrs := make([]string, 0, len(activePeers))
+	for k := range activePeers {
+		addrs = append(addrs, k)
+	}
+	nodes := addr{addrs}
+	payload := utils.GobEncode(nodes)
 	request := append(commandToBytes("addr"), payload...)
 
-	sendData(address, request)
+	return sendData(address, request)
 }
 
-func sendBlock(addr string, b *blockchain.Block) {
+func sendBlock(addr string, b *blockchain.Block) error {
 	data := block{b.Serialize()}
-	payload := gobEncode(data)
+	payload := utils.GobEncode(data)
 	request := append(commandToBytes("block"), payload...)
 
-	sendData(addr, request)
+	return sendData(addr, request)
+}
+
+func sendVerack(addr string) error {
+	payload := utils.GobEncode(verack{})
+	request := append(commandToBytes("verack"), payload...)
+
+	return sendData(addr, request)
+}
+
+func sendPing(addr string) error {
+	payload := utils.GobEncode(ping{})
+	request := append(commandToBytes("ping"), payload...)
+
+	return sendData(addr, request)
+}
+
+func sendPong(addr string) error {
+	payload := utils.GobEncode(pong{})
+	request := append(commandToBytes("pong"), payload...)
+
+	return sendData(addr, request)
 }

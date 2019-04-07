@@ -6,6 +6,7 @@ import (
 	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/gob"
 	"golang.org/x/crypto/ripemd160"
 	"log"
 	"math/big"
@@ -62,6 +63,28 @@ func SignatureCheck(signature, pubey, dataToVerify []byte) bool {
 		return false
 	}
 	return true
+}
+
+func GobDecode(data []byte, e interface{}) {
+	var buff bytes.Buffer
+	buff.Write(data)
+	dec := gob.NewDecoder(&buff)
+	err := dec.Decode(e)
+	if err != nil {
+		log.Panic(err)
+	}
+}
+
+func GobEncode(data interface{}) []byte {
+	var buff bytes.Buffer
+
+	enc := gob.NewEncoder(&buff)
+	err := enc.Encode(data)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return buff.Bytes()
 }
 
 func PanicIfError(err error) {

@@ -1,9 +1,9 @@
 package net
 
 import (
+	"blockchain_go/blockchain"
 	"blockchain_go/log"
 	"bytes"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"net"
@@ -19,32 +19,10 @@ func dnsSeedPeerDiscovery() []string {
 	currID, _ := strconv.Atoi(nodeID)
 
 	var peers []string
-	for i := 3000; i < currID; {
+	for i := 3000; i < currID; i++ {
 		peers = append(peers, fmt.Sprintf("localhost:%d", i))
 	}
 	return peers
-}
-
-func gobDecode(data []byte, e interface{}) {
-	var buff bytes.Buffer
-	buff.Write(data)
-	dec := gob.NewDecoder(&buff)
-	err := dec.Decode(e)
-	if err != nil {
-		log.Net.Panic(err)
-	}
-}
-
-func gobEncode(data interface{}) []byte {
-	var buff bytes.Buffer
-
-	enc := gob.NewEncoder(&buff)
-	err := enc.Encode(data)
-	if err != nil {
-		log.Net.Panic(err)
-	}
-
-	return buff.Bytes()
 }
 
 func commandToBytes(command string) []byte {
@@ -73,26 +51,23 @@ func extractCommand(request []byte) []byte {
 	return request[:commandLength]
 }
 
-func sendData(addr string, data []byte) {
+func sendData(addr string, data []byte) error {
+	command := bytesToCommand(data[:commandLength])
+	log.Net.Printf("Send %s msg to %s", command, addr)
+	nodeID := os.Getenv("NODE_ID")
+	data = append(data, []byte(nodeID)...)
+
 	conn, err := net.Dial(protocol, addr)
 	if err != nil {
 		log.Net.Printf("%s is not available\n", addr)
-		var updatedNodes []string
-
-		for _, node := range knownNodes {
-			if node != addr {
-				updatedNodes = append(updatedNodes, node)
-			}
+		delete(activePeers, addr)
+		if len(activePeers) < rePeerDiscoveryThreshold {
+			go initPeerDiscovery(blockchain.GetBlockchain())
 		}
-
-		knownNodes = updatedNodes
-
-		return
+		return err
 	}
 	defer conn.Close()
 
 	_, err = io.Copy(conn, bytes.NewReader(data))
-	if err != nil {
-		log.Net.Panic(err)
-	}
+	return err
 }
