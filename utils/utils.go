@@ -63,3 +63,9 @@ func SignatureCheck(signature, pubey, dataToVerify []byte) bool {
 	}
 	return true
 }
+
+func PanicIfError(err error) {
+	if err != nil {
+		log.Panic(err)
+	}
+}
