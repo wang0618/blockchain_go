@@ -13,7 +13,7 @@ import (
 
 const (
 	maxConnectPeer           = 20 // 最大允许连接的节点数量
-	rePeerDiscoveryThreshold = 3  // 对等节点数量小于rePeerDiscoveryThreshold时，再次运行节点发现
+	rePeerDiscoveryThreshold = 1  // 对等节点数量小于rePeerDiscoveryThreshold时，再次运行节点发现
 )
 const protocol = "tcp"
 const nodeVersion = 1
@@ -21,29 +21,18 @@ const commandLength = 12
 
 var nodeAddress string
 var miningAddress string
-var CenterNode string = "localhost:3000"
-var knownNodes = []string{CenterNode}
-
-type connectStatus int
-
-type connectingPeerStatus struct {
-	status     connectStatus
-	timestamp  int64
-	versionMsg *version
-}
-
-const (
-	needSendVer connectStatus = iota //  未发送version
-	waitVer                          //  发送version等待回应
-	waitVerAck                       // 等待VerAck
-)
+var CenterNode = "localhost:3000"
 
 // TODO: 使用connectingPeersMutex互斥访问connectingPeers和activePeers
 var mutex sync.Mutex
-// 正在连接的节点 节点地址->连接状态
-var connectingPeers = map[string]*connectingPeerStatus{}
+
+// 正在连接的节点 节点地址->连接时间戳
+//var connectingPeers = map[string]int64{}
+var connectingPeers = sync.Map{}
+
 // 已连接的节点 节点地址->上次接收到节点消息时的时间戳
-var activePeers = map[string]int64{}
+//var activePeers = map[string]int64{}
+var activePeers = sync.Map{}
 
 // initPeerDiscovery 初始化节点发现
 func initPeerDiscovery(bc *blockchain.Blockchain) {
@@ -51,11 +40,9 @@ func initPeerDiscovery(bc *blockchain.Blockchain) {
 	peers := dnsSeedPeerDiscovery()
 	log.Net.Printf("Find peers %#v\n", peers)
 	for _, addr := range peers {
-		connectingPeers[addr] = &connectingPeerStatus{status: needSendVer, timestamp: nowTS}
-		go func() {
-			sendVersion(addr, bc)
-			connectingPeers[addr] = &connectingPeerStatus{status: waitVer, timestamp: nowTS}
-		}()
+		sendVersion(addr, bc)
+		//connectingPeers[addr] = nowTS
+		connectingPeers.Store(addr, nowTS)
 	}
 
 }
@@ -72,23 +59,17 @@ func connnectionCheck(bc *blockchain.Blockchain) {
 	for {
 		time.Sleep(checkIntervalSec * time.Second)
 		// 检查已连接节点
-		for peerAddr, ts := range activePeers {
-			if time.Now().Unix()-ts > inactiveThreshold {
-				delete(activePeers, peerAddr)
-			} else if time.Now().Unix()-ts > sendPingThreshold {
-				sendPing(peerAddr)
+		activePeers.Range(func(peerAddr, ts interface{}) bool {
+			if time.Now().Unix()-ts.(int64) > inactiveThreshold {
+				activePeers.Delete(peerAddr)
+			} else if time.Now().Unix()-ts.(int64) > sendPingThreshold {
+				sendPing(peerAddr.(string))
 			}
-		}
+			return true
+		})
 
-		if len(activePeers) < rePeerDiscoveryThreshold {
+		if lenSycnMap(&activePeers) < rePeerDiscoveryThreshold {
 			initPeerDiscovery(bc)
-		}
-
-		// 检查正在连接的节点
-		for peerAddr, s := range connectingPeers {
-			if time.Now().Unix()-s.timestamp > inactiveThreshold {
-				delete(connectingPeers, peerAddr)
-			}
 		}
 	}
 }
@@ -105,16 +86,16 @@ func handleConnection(conn net.Conn, bc *blockchain.Blockchain) {
 	//fromAddr := conn.RemoteAddr().String()
 	request = request[:len(request)-4]
 
-	log.Net.Printf("Received %s command from %s\n", command, fromAddr)
-
 	// 远程节点不在当前建立连接的对等节点当中时，仅允许接收version、verack消息
-	if activePeers[fromAddr] == 0 && command != "version" &&  command != "verack"{
+	if !existInSyncMap(&activePeers, fromAddr) && command != "version" && command != "verack" {
 		return
 	}
 
-	if activePeers[fromAddr] != 0 {
-		activePeers[fromAddr] = time.Now().Unix()
+	if existInSyncMap(&activePeers, fromAddr) {
+		activePeers.Store(fromAddr, time.Now().Unix())
 	}
+
+	log.Net.Printf("Received %s command from %s\n", command, fromAddr)
 
 	switch command {
 	case "addr":
@@ -171,7 +152,7 @@ func StartServer(nodeID, minerAddress string) {
 
 	bc := blockchain.GetBlockchain()
 
-	initPeerDiscovery(bc)
+	go initPeerDiscovery(bc)
 
 	go connnectionCheck(bc)
 

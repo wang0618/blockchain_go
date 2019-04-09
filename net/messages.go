@@ -22,6 +22,7 @@ type block struct {
 }
 
 type getblocks struct {
+	StartHash []byte
 }
 
 type getdata struct {
@@ -49,8 +50,8 @@ func sendInv(address, kind string, items [][]byte) error {
 	return sendData(address, request)
 }
 
-func sendGetBlocks(address string) error {
-	payload := utils.GobEncode(getblocks{})
+func sendGetBlocks(address string, startHash []byte) error {
+	payload := utils.GobEncode(getblocks{startHash})
 	request := append(commandToBytes("getblocks"), payload...)
 
 	return sendData(address, request)
@@ -81,10 +82,11 @@ func sendVersion(addr string, bc *blockchain.Blockchain) error {
 }
 
 func sendAddr(address string) error {
-	addrs := make([]string, 0, len(activePeers))
-	for k := range activePeers {
-		addrs = append(addrs, k)
-	}
+	addrs := make([]string, 0, lenSycnMap(&activePeers))
+	activePeers.Range(func(addr, value interface{}) bool {
+		addrs = append(addrs, addr.(string))
+		return true
+	})
 	nodes := addr{addrs}
 	payload := utils.GobEncode(nodes)
 	request := append(commandToBytes("addr"), payload...)

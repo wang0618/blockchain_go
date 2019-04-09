@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestBCAddBlock(t *testing.T) {
+func TestBlockchain_AddBlock_GetBlockHashes(t *testing.T) {
 	genesis := newGenesisBlock()
 
 	blocks := []*Block{genesis}
@@ -15,7 +15,7 @@ func TestBCAddBlock(t *testing.T) {
 		last := blocks[len(blocks)-1]
 		b := NewBlock([]*transaction.Transaction{}, last.Hash, last.Height+1, last.Difficulty)
 		b.Hash = make([]byte, 32)
-		copy(b.Hash, genesis.Hash)
+		copy(b.Hash, last.Hash)
 		b.Hash[0]++
 		blocks = append(blocks, b)
 	}
@@ -45,4 +45,17 @@ func TestBCAddBlock(t *testing.T) {
 	bc.AddBlock(blocks[8])
 	bc.AddBlock(blocks[6])
 	assert.Equal(t, bc.tip, blocks[8].Hash)
+
+	bc.AddBlock(blocks[9])
+	assert.Equal(t, bc.tip, blocks[9].Hash)
+
+	hashs := bc.GetBlockHashes(blocks[2].Hash, 3)
+	assert.Equal(t, hashs, [][]byte{blocks[3].Hash, blocks[4].Hash, blocks[5].Hash})
+
+	hashs = bc.GetBlockHashes(blocks[0].Hash, 5)
+	assert.Equal(t, hashs, [][]byte{blocks[1].Hash, blocks[2].Hash, blocks[3].Hash, blocks[4].Hash, blocks[5].Hash})
+
+	hashs = bc.GetBlockHashes(blocks[8].Hash, 5)
+	assert.Equal(t, hashs, [][]byte{blocks[9].Hash})
+
 }

@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 )
 
 // dnsSeedPeerDiscovery 通过DNS Seed获取对等节点地址
@@ -60,8 +61,8 @@ func sendData(addr string, data []byte) error {
 	conn, err := net.Dial(protocol, addr)
 	if err != nil {
 		log.Net.Printf("%s is not available\n", addr)
-		delete(activePeers, addr)
-		if len(activePeers) < rePeerDiscoveryThreshold {
+		activePeers.Delete(addr)
+		if lenSycnMap(&activePeers) < rePeerDiscoveryThreshold {
 			go initPeerDiscovery(blockchain.GetBlockchain())
 		}
 		return err
@@ -70,4 +71,18 @@ func sendData(addr string, data []byte) error {
 
 	_, err = io.Copy(conn, bytes.NewReader(data))
 	return err
+}
+
+func lenSycnMap(p *sync.Map) (len int) {
+	len = 0
+	p.Range(func(key, value interface{}) bool {
+		len++
+		return true
+	})
+	return len
+}
+
+func existInSyncMap(p *sync.Map, key interface{}) bool {
+	_, ok := p.Load(key)
+	return ok
 }

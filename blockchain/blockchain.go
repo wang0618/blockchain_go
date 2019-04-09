@@ -266,22 +266,29 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 	return block, nil
 }
 
-// GetBlockHashes 获取本地区块链哈希列表
-func (bc *Blockchain) GetBlockHashes() [][]byte {
-	var blocks [][]byte
+// GetBlockHashes 获取本地区块链哈希列表, 返回从stopHash之后开始的limit个区块哈希
+// 哈希列表以区块高度升序排列
+func (bc *Blockchain) GetBlockHashes(stopHash []byte, limit int) [][]byte {
+	blocks := make([][]byte, limit) // 循环队列
 	bci := bc.Iterator()
 
+	cnt := 0
 	for {
 		block := bci.Next()
-
-		blocks = append(blocks, block.Hash)
-
+		if bytes.Compare(stopHash, block.Hash) == 0 {
+			break
+		}
+		blocks[limit-cnt%limit-1] = block.Hash
+		cnt++
 		if len(block.PrevBlockHash) == 0 {
 			break
 		}
 	}
-
-	return blocks
+	if limit >= cnt {
+		return blocks[limit-cnt%limit:]
+	} else {
+		return append(blocks[limit-cnt%limit:], blocks[:limit-cnt%limit]...)
+	}
 }
 
 // GetCurrentDifficult 返回当前区块链的挖矿难度值

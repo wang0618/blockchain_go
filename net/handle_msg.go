@@ -5,14 +5,24 @@ import (
 	"blockchain_go/log"
 	"blockchain_go/miner"
 	"blockchain_go/transaction"
-	"bytes"
 	"encoding/hex"
+	"sync"
 	"time"
 )
 
+//var LostBlockCnt = 0 // 本地未同步的区块数量，LostBlockCnt>0时，处于IDB模式，不广播区块
+var IBDMode = false
+var IBDSyncNodeAddr = ""
+
 // 正在下载中的区块hash列表
 var blocksInTransit = [][]byte{}
+
 var mempool = make(map[string]transaction.Transaction)
+
+const maxInvBlockHash = 32
+
+//var delayVersionPayload = map[string]*version{}
+var delayVersionPayload = sync.Map{}
 
 /*
 From https://en.bitcoin.it/wiki/Version_Handshake
@@ -42,32 +52,37 @@ version消息 "你好，我的区块高度是..."
 See https://en.bitcoin.it/wiki/Version_Handshake
 */
 func (payload *version) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
-	status, exist := connectingPeers[fromAddr]
+	_, exist := connectingPeers.Load(fromAddr)
 	if exist {
 		// 本节点是首先发出version消息的节点
-		if status.status != waitVer {
-			// TODO: 异常处理
-			return
-		}
-
-		status.status = waitVerAck
-		status.timestamp = time.Now().Unix()
-		status.versionMsg = payload
 		sendVerack(fromAddr)
+		activePeers.Store(fromAddr, time.Now().Unix())
+		connectingPeers.Delete(fromAddr)
+
+		// ISSUE： IBDSyncNode 有可能也不是网络最新的
+		if bc.GetBestHeight() < payload.BestHeight {
+			if !IBDMode {
+				IBDMode = true
+				log.Net.Printf("Start IBD mode, Sync node: %s\n", fromAddr)
+				IBDSyncNodeAddr = fromAddr
+			}
+			sendGetBlocks(fromAddr, bc.LastBlockInfo().Hash)
+		}
 	} else {
-		if len(connectingPeers) >= maxConnectPeer {
+		if lenSycnMap(&activePeers) >= maxConnectPeer {
 			return
 		}
-		connectingPeers[fromAddr] = &connectingPeerStatus{waitVerAck, time.Now().Unix(), payload}
-		sendVersion(fromAddr, bc)
+		activePeers.Store(fromAddr, time.Now().Unix())
 
+		delayVersionPayload.Store(fromAddr, payload) // 这个version消息要到收到fromAddr的verack消息是再去处理
+
+		sendVersion(fromAddr, bc)
 		sendVerack(fromAddr)
 	}
-
 }
 
 /*
-verack消息 "同意连接"
+verack消息
 用于回应收到的version消息
 
 消息处理逻辑：
@@ -75,25 +90,25 @@ verack消息 "同意连接"
  - 若本节点的区块链的高度大于发送节点，则向消息来源节点发送version消息，表明对方节点有未接收的区块。
 */
 func (payload *verack) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
-	status, exist := connectingPeers[fromAddr]
+	versionMsg, exist := delayVersionPayload.Load(fromAddr)
 	if !exist {
 		// TODO: 异常处理
 		return
 	}
-	if status.status != waitVerAck {
-		// TODO: 异常处理
-		return
-	}
 
-	delete(connectingPeers, fromAddr)
-	activePeers[fromAddr] = time.Now().Unix()
+	delayVersionPayload.Delete(fromAddr)
 
-	versionMsg := status.versionMsg
 	myBestHeight := bc.GetBestHeight()
-	foreignerBestHeight := versionMsg.BestHeight
+	foreignerBestHeight := versionMsg.(*version).BestHeight
 
+	// ISSUE： IBDSyncNode 有可能也不是网络最新的
 	if myBestHeight < foreignerBestHeight {
-		sendGetBlocks(fromAddr)
+		if !IBDMode {
+			IBDMode = true
+			log.Net.Printf("Start IBD mode, Sync node: %s\n", fromAddr)
+			IBDSyncNodeAddr = fromAddr
+		}
+		sendGetBlocks(fromAddr, bc.LastBlockInfo().Hash)
 	}
 }
 
@@ -111,7 +126,7 @@ TODO:
 对方节点没有时，向其他节点获取或者退后区块获取
 */
 func (payload *getblocks) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
-	blocks := bc.GetBlockHashes()
+	blocks := bc.GetBlockHashes(payload.StartHash, maxInvBlockHash)
 	sendInv(fromAddr, "block", blocks)
 }
 
@@ -127,24 +142,36 @@ inv消息 "我有这些区块/交易"
 比较本地有无相关区块或交易，没有则通过getdata消息获取相关数据。
 */
 func (payload *inv) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
-
 	log.Net.Printf("Recevied inventory with %d %s\n", len(payload.Items), payload.Type)
 
-	if payload.Type == "block" {
-		blocksInTransit = payload.Items
-
-		blockHash := payload.Items[0]
-		sendGetData(fromAddr, "block", blockHash)
-
-		newInTransit := [][]byte{}
-		for _, b := range blocksInTransit {
-			if bytes.Compare(b, blockHash) != 0 {
-				newInTransit = append(newInTransit, b)
-			}
+	if IBDMode {
+		// IBD模式下，仅接受SyncNode的block类型inv消息；仅在blocksInTransit为空时接受inv
+		if payload.Type != "block" || fromAddr != IBDSyncNodeAddr || len(blocksInTransit) != 0 {
+			return
 		}
-		blocksInTransit = newInTransit
+
+		if len(payload.Items) == 0 {
+			// IBD模式下，在获取完blocksInTransit里的区块后，再次发送getblocks消息，如果响应的inv没有数据，则说明同步完成
+			IBDMode = false
+			log.Net.Println("End IBD mode")
+		} else {
+			blocksInTransit = payload.Items[1:]
+			sendGetData(fromAddr, "block", payload.Items[0])
+		}
+
+		return
 	}
 
+	if len(payload.Items) == 0 {
+		return
+	}
+
+	if payload.Type == "block" {
+		blocksInTransit = payload.Items[1:]
+		sendGetData(fromAddr, "block", payload.Items[0])
+	}
+
+	// 目前仅获取inv中的第一个交易
 	if payload.Type == "tx" {
 		txID := payload.Items[0]
 
@@ -180,7 +207,6 @@ func (payload *getdata) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 		tx := mempool[txID]
 
 		SendTx(fromAddr, &tx)
-		// delete(mempool, txID)
 	}
 }
 
@@ -193,8 +219,8 @@ block消息 "给你区块数据"
 消息处理逻辑：
 验证区块，并将其放到本地区块链里
 
+TODO: IBD 模式下，不广播区块
 TODO：并非无条件信任，我们应该在将每个块加入到区块链之前对它们进行验证。
-TODO: 并非运行 UTXOSet.Reindex()， 而是应该使用 UTXOSet.Update(block)，因为如果区块链很大，它将需要很多时间来对整个 UTXO 集重新索引。
 */
 func (payload *block) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 	blockData := payload.Block
@@ -205,17 +231,31 @@ func (payload *block) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 		return
 	}
 
-	log.Net.Println("Recevied a new block!")
-	bc.AddBlock(block)
+	log.Net.Printf("Recevied a new block! Height:%d Hash:%x\n", block.Height, block.Hash)
+	// TODO: 区块校验
 
+	bc.AddBlock(block)
 	log.Net.Printf("Added block %x\n", block.Hash)
 
-	if len(blocksInTransit) > 0 {
-		blockHash := blocksInTransit[0]
-		sendGetData(fromAddr, "block", blockHash)
+	if IBDMode {
+		if len(blocksInTransit) == 0 {
+			sendGetBlocks(fromAddr, bc.LastBlockInfo().Hash)
+		}
+	} else {
+		// 向其他节点广播区块消息
+		activePeers.Range(func(addr, value interface{}) bool {
+			if addr.(string) != fromAddr {
+				sendInv(addr.(string), "block", [][]byte{block.Hash})
+			}
+			return true
+		})
+	}
 
+	if len(blocksInTransit) > 0 {
+		sendGetData(fromAddr, "block", blocksInTransit[0])
 		blocksInTransit = blocksInTransit[1:]
 	} else {
+		// TODO: 并非运行 UTXOSet.Reindex()， 而是应该使用 UTXOSet.Update(block)，因为如果区块链很大，它将需要很多时间来对整个 UTXO 集重新索引。
 		UTXOSet := blockchain.UTXOSet{bc}
 		UTXOSet.Reindex()
 	}
@@ -242,7 +282,7 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 		return
 	}
 
-	if len(tx.Vout) == 0 || len(tx.Vout) == 0 {
+	if len(tx.Vin) == 0 || len(tx.Vout) == 0 {
 		return
 	}
 
@@ -253,52 +293,52 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
 	mempool[hex.EncodeToString(tx.ID)] = tx
 
-	if nodeAddress == knownNodes[0] {
-		// 中心节点向其他节点广播交易消息
-		for _, node := range knownNodes {
-			if node != fromAddr {
-				sendInv(node, "tx", [][]byte{tx.ID})
+	// 向其他节点广播交易消息
+	activePeers.Range(func(addr, value interface{}) bool {
+		if addr.(string) != fromAddr {
+			sendInv(addr.(string), "tx", [][]byte{tx.ID})
+		}
+		return true
+	})
+
+	// 矿工节使用交易挖矿
+	if len(mempool) >= 2 && len(miningAddress) > 0 {
+	MineTransactions:
+		var txs []*transaction.Transaction
+
+		for id := range mempool {
+			tx := mempool[id]
+			if bc.VerifyTransactionSig(&tx) {
+				txs = append(txs, &tx)
 			}
 		}
-	} else {
-		// 矿工节使用交易挖矿
-		if len(mempool) >= 2 && len(miningAddress) > 0 {
-		MineTransactions:
-			var txs []*transaction.Transaction
 
-			for id := range mempool {
-				tx := mempool[id]
-				if bc.VerifyTransactionSig(&tx) {
-					txs = append(txs, &tx)
-				}
-			}
+		if len(txs) == 0 {
+			log.Net.Println("All transactions are invalid! Waiting for new ones...")
+			return
+		}
 
-			if len(txs) == 0 {
-				log.Net.Println("All transactions are invalid! Waiting for new ones...")
-				return
-			}
+		cbTx := transaction.NewCoinbaseTX(miningAddress, "")
+		txs = append(txs, cbTx)
 
-			cbTx := transaction.NewCoinbaseTX(miningAddress, "")
-			txs = append(txs, cbTx)
+		newBlock := miner.MineBlock(bc, txs)
+		UTXOSet := blockchain.UTXOSet{bc}
+		UTXOSet.Reindex()
 
-			newBlock := miner.MineBlock(bc, txs)
-			UTXOSet := blockchain.UTXOSet{bc}
-			UTXOSet.Reindex()
+		log.Net.Println("New block is mined!")
 
-			log.Net.Println("New block is mined!")
+		for _, tx := range txs {
+			txID := hex.EncodeToString(tx.ID)
+			delete(mempool, txID)
+		}
 
-			for _, tx := range txs {
-				txID := hex.EncodeToString(tx.ID)
-				delete(mempool, txID)
-			}
+		activePeers.Range(func(addr, value interface{}) bool {
+			sendInv(addr.(string), "block", [][]byte{newBlock.Hash})
+			return true
+		})
 
-			for _, node := range knownNodes {
-				sendInv(node, "block", [][]byte{newBlock.Hash})
-			}
-
-			if len(mempool) > 0 {
-				goto MineTransactions
-			}
+		if len(mempool) > 0 {
+			goto MineTransactions
 		}
 	}
 }
