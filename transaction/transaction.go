@@ -131,7 +131,7 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 
 // Verify verifies signatures of Transaction inputs
 // 被 Blockchain.VerifyTransaction(tx *transaction.Transaction) 调用
-func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
+func (tx *Transaction) VerifySig(prevTXs map[string]Transaction) bool {
 	if tx.IsCoinbase() {
 		return true
 	}

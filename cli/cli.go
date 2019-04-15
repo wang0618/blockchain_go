@@ -55,6 +55,7 @@ func (cli *CLI) Run() {
 	sendAmount := sendCmd.Int("amount", 0, "Amount to send")
 	sendMine := sendCmd.Bool("mine", false, "Mine immediately on the same node")
 	startNodeMiner := startNodeCmd.String("miner", "", "Enable mining mode and send reward to ADDRESS")
+	webui := startNodeCmd.Bool("webui", false, "Enable webUI")
 	blockGenDelta := createGenesisBlockCmd.Int("delta", 180, "区块生成平均间隔")
 
 	switch os.Args[1] {
@@ -143,7 +144,7 @@ func (cli *CLI) Run() {
 			startNodeCmd.Usage()
 			os.Exit(1)
 		}
-		cli.startNode(nodeID, *startNodeMiner)
+		cli.startNode(nodeID, *startNodeMiner, *webui)
 	}
 
 	if createGenesisBlockCmd.Parsed() {

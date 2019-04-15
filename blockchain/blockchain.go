@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"blockchain_go/utils"
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
@@ -110,39 +111,48 @@ func (bc *Blockchain) LastBlockInfo() *Block {
 	return block
 }
 
+var orphanBlocks = map[string]*Block{} // 游离区块， string(区块前驱哈希)->区块
+
 // AddBlock saves the block into the blockchain
+// 支持游离区块管理
 func (bc *Blockchain) AddBlock(block *Block) {
 	err := bc.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 		blockInDb := b.Get(block.Hash)
-
 		if blockInDb != nil {
 			return nil
 		}
 
-		blockData := block.Serialize()
-		err := b.Put(block.Hash, blockData)
-		if err != nil {
-			log.Panic(err)
+		prevInDb := b.Get(block.PrevBlockHash)
+		if prevInDb == nil {
+			// block为游离区块
+			orphanBlocks[string(block.PrevBlockHash)] = block
+			return nil
+		}
+		err := b.Put(block.Hash, block.Serialize())
+		utils.PanicIfError(err)
+
+		currBlock := block
+		for h := block.Hash; orphanBlocks[string(h)] != nil; h = orphanBlocks[string(h)].Hash {
+			currBlock = orphanBlocks[string(h)]
+
+			err := b.Put(currBlock.Hash, currBlock.Serialize())
+			utils.PanicIfError(err)
 		}
 
 		lastHash := b.Get([]byte("l"))
 		lastBlockData := b.Get(lastHash)
 		lastBlock := DeserializeBlock(lastBlockData)
 
-		if block.Height > lastBlock.Height {
-			err = b.Put([]byte("l"), block.Hash)
-			if err != nil {
-				log.Panic(err)
-			}
-			bc.tip = block.Hash
+		if currBlock.Height > lastBlock.Height {
+			err = b.Put([]byte("l"), currBlock.Hash)
+			utils.PanicIfError(err)
+			bc.tip = currBlock.Hash
 		}
 
 		return nil
 	})
-	if err != nil {
-		log.Panic(err)
-	}
+	utils.PanicIfError(err)
 }
 
 // FindTransaction finds a transaction by its ID
@@ -166,7 +176,7 @@ func (bc *Blockchain) FindTransaction(ID []byte) (transaction.Transaction, error
 	return transaction.Transaction{}, errors.New("Transaction is not found")
 }
 
-// FindUTXO finds all unspent transaction outputs and returns transactions with spent outputs removed
+// FindUTXO 返回一个 txID -> []UTXO 的map
 func (bc *Blockchain) findUTXO() map[string][]UTXOItem {
 	UTXOs := make(map[string][]UTXOItem)       // txID ->  UTXO slice
 	spentTXOs := make(map[string]map[int]bool) // txID ->  map(output_idx -> is_spent)
@@ -256,22 +266,29 @@ func (bc *Blockchain) GetBlock(blockHash []byte) (Block, error) {
 	return block, nil
 }
 
-// GetBlockHashes returns a list of hashes of all the blocks in the chain
-func (bc *Blockchain) GetBlockHashes() [][]byte {
-	var blocks [][]byte
+// GetBlockHashes 获取本地区块链哈希列表, 返回从stopHash之后开始的limit个区块哈希
+// 哈希列表以区块高度升序排列
+func (bc *Blockchain) GetBlockHashes(stopHash []byte, limit int) [][]byte {
+	blocks := make([][]byte, limit) // 循环队列
 	bci := bc.Iterator()
 
+	cnt := 0
 	for {
 		block := bci.Next()
-
-		blocks = append(blocks, block.Hash)
-
+		if bytes.Compare(stopHash, block.Hash) == 0 {
+			break
+		}
+		blocks[limit-cnt%limit-1] = block.Hash
+		cnt++
 		if len(block.PrevBlockHash) == 0 {
 			break
 		}
 	}
-
-	return blocks
+	if limit >= cnt {
+		return blocks[limit-cnt%limit:]
+	} else {
+		return append(blocks[limit-cnt%limit:], blocks[:limit-cnt%limit]...)
+	}
 }
 
 // GetCurrentDifficult 返回当前区块链的挖矿难度值
@@ -298,7 +315,8 @@ func (bc *Blockchain) SignTransaction(tx *transaction.Transaction, privKey ecdsa
 
 // VerifyTransaction verifies transaction input signatures
 // 仅校验了签名，没有检测是否双花
-func (bc *Blockchain) VerifyTransaction(tx *transaction.Transaction) bool {
+// TODO 失败时返回具体错误原因
+func (bc *Blockchain) VerifyTransactionSig(tx *transaction.Transaction) bool {
 	if tx.IsCoinbase() {
 		return true
 	}
@@ -313,7 +331,7 @@ func (bc *Blockchain) VerifyTransaction(tx *transaction.Transaction) bool {
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 	}
 
-	return tx.Verify(prevTXs)
+	return tx.VerifySig(prevTXs)
 }
 
 // VerifyTransaction verifies transaction input signatures

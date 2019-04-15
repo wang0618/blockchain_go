@@ -13,7 +13,7 @@ func MineBlock(bc *blockchain.Blockchain, transactions []*transaction.Transactio
 
 	for _, tx := range transactions {
 		// TODO: ignore transaction if it's not valid
-		if bc.VerifyTransaction(tx) != true {
+		if bc.VerifyTransactionSig(tx) != true {
 			log.Panic("ERROR: Invalid transaction")
 		}
 	}

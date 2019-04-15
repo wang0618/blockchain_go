@@ -6,9 +6,12 @@ import (
 	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/gob"
 	"golang.org/x/crypto/ripemd160"
 	"log"
 	"math/big"
+	"os/exec"
+	"runtime"
 )
 
 // IntToHex converts an int64 to a byte array
@@ -62,4 +65,48 @@ func SignatureCheck(signature, pubey, dataToVerify []byte) bool {
 		return false
 	}
 	return true
+}
+
+func GobDecode(data []byte, e interface{}) {
+	var buff bytes.Buffer
+	buff.Write(data)
+	dec := gob.NewDecoder(&buff)
+	err := dec.Decode(e)
+	if err != nil {
+		log.Panic(err)
+	}
+}
+
+func GobEncode(data interface{}) []byte {
+	var buff bytes.Buffer
+
+	enc := gob.NewEncoder(&buff)
+	err := enc.Encode(data)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return buff.Bytes()
+}
+
+func PanicIfError(err error) {
+	if err != nil {
+		log.Panic(err)
+	}
+}
+
+// OpenBrowser tries to open the URL in a browser,
+// and returns whether it succeed in doing so.
+func OpenBrowser(url string) bool {
+	var args []string
+	switch runtime.GOOS {
+	case "darwin":
+		args = []string{"open"}
+	case "windows":
+		args = []string{"cmd", "/c", "start"}
+	default:
+		args = []string{"xdg-open"}
+	}
+	cmd := exec.Command(args[0], append(args[1:], url)...)
+	return cmd.Start() == nil
 }
