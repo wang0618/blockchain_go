@@ -320,6 +320,7 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
 		cbTx := transaction.NewCoinbaseTX(miningAddress, "")
 		txs = append(txs, cbTx)
+		txs[0], txs[len(txs)-1] = txs[len(txs)-1], txs[0] // move coinbase tx first
 
 		newBlock := miner.MineBlock(bc, txs)
 		UTXOSet := blockchain.UTXOSet{bc}

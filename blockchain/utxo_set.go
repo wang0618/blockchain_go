@@ -177,52 +177,72 @@ func (u UTXOSet) Reindex() {
 	})
 }
 
+func updateTx(b *bolt.Bucket, tx *transaction.Transaction) {
+	// 删除交易输入的UTXO
+	if tx.IsCoinbase() == false {
+		for _, vin := range tx.Vin {
+			var updatedOuts []UTXOItem
+			outsBytes := b.Get(vin.Txid)
+			outs := DeserializeUTXOItems(outsBytes)
+
+			for _, out := range outs {
+				if out.Idx != vin.Vout {
+					updatedOuts = append(updatedOuts, out)
+				}
+			}
+
+			if len(updatedOuts) == 0 {
+				err := b.Delete(vin.Txid)
+				if err != nil {
+					log.Panic(err)
+				}
+			} else {
+				err := b.Put(vin.Txid, SerializeUTXOItems(updatedOuts))
+				if err != nil {
+					log.Panic(err)
+				}
+			}
+
+		}
+	}
+	// 新增新的UTXO
+	var newOutputs []UTXOItem
+	for idx, out := range tx.Vout {
+		newOutputs = append(newOutputs, UTXOItem{idx, out})
+	}
+
+	err := b.Put(tx.ID, SerializeUTXOItems(newOutputs))
+	if err != nil {
+		log.Panic(err)
+	}
+}
+
 // Update updates the UTXO set with transactions from the Block
 // The Block is considered to be the tip of a blockchain
 func (u UTXOSet) Update(block *Block) {
 	db := u.Blockchain.db
 
-	err := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(utxoBucket))
+	err := db.Update(func(dbtx *bolt.Tx) error {
+		b := dbtx.Bucket([]byte(utxoBucket))
 
 		for _, tx := range block.Transactions {
-			if tx.IsCoinbase() == false {
-				for _, vin := range tx.Vin {
-					var updatedOuts []UTXOItem
-					outsBytes := b.Get(vin.Txid)
-					outs := DeserializeUTXOItems(outsBytes)
-
-					for _, out := range outs {
-						if out.Idx != vin.Vout {
-							updatedOuts = append(updatedOuts, out)
-						}
-					}
-
-					if len(updatedOuts) == 0 {
-						err := b.Delete(vin.Txid)
-						if err != nil {
-							log.Panic(err)
-						}
-					} else {
-						err := b.Put(vin.Txid, SerializeUTXOItems(updatedOuts))
-						if err != nil {
-							log.Panic(err)
-						}
-					}
-
-				}
-			}
-			var newOutputs []UTXOItem
-			for idx, out := range tx.Vout {
-				newOutputs = append(newOutputs, UTXOItem{idx, out})
-			}
-
-			err := b.Put(tx.ID, SerializeUTXOItems(newOutputs))
-			if err != nil {
-				log.Panic(err)
-			}
+			updateTx(b, tx)
 		}
 
+		return nil
+	})
+	if err != nil {
+		log.Panic(err)
+	}
+}
+
+// UpdateForTx 根据交易更新UTXO
+func (u UTXOSet) UpdateForTx(tx *transaction.Transaction) {
+	db := u.Blockchain.db
+
+	err := db.Update(func(dbtx *bolt.Tx) error {
+		b := dbtx.Bucket([]byte(utxoBucket))
+		updateTx(b, tx)
 		return nil
 	})
 	if err != nil {

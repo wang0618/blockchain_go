@@ -164,3 +164,16 @@ func StartServer(nodeID, minerAddress string) {
 		go handleConnection(conn, bc)
 	}
 }
+
+func GetActivePeers() map[string]int64 {
+	peers := map[string]int64{}
+	activePeers.Range(func(key, value interface{}) bool {
+		peers[key.(string)] = value.(int64)
+		return true
+	})
+	return peers
+}
+
+func GetNodeAddr() string {
+	return nodeAddress
+}

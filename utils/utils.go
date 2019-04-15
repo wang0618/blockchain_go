@@ -10,6 +10,8 @@ import (
 	"golang.org/x/crypto/ripemd160"
 	"log"
 	"math/big"
+	"os/exec"
+	"runtime"
 )
 
 // IntToHex converts an int64 to a byte array
@@ -91,4 +93,20 @@ func PanicIfError(err error) {
 	if err != nil {
 		log.Panic(err)
 	}
+}
+
+// OpenBrowser tries to open the URL in a browser,
+// and returns whether it succeed in doing so.
+func OpenBrowser(url string) bool {
+	var args []string
+	switch runtime.GOOS {
+	case "darwin":
+		args = []string{"open"}
+	case "windows":
+		args = []string{"cmd", "/c", "start"}
+	default:
+		args = []string{"xdg-open"}
+	}
+	cmd := exec.Command(args[0], append(args[1:], url)...)
+	return cmd.Start() == nil
 }

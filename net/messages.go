@@ -122,3 +122,17 @@ func sendPong(addr string) error {
 
 	return sendData(addr, request)
 }
+
+func BroadcastTx(tnx *transaction.Transaction) {
+	activePeers.Range(func(addr, value interface{}) bool {
+		SendTx(addr.(string), tnx)
+		return true
+	})
+}
+
+func BroadcastBlock(b *blockchain.Block) {
+	activePeers.Range(func(addr, value interface{}) bool {
+		sendBlock(addr.(string), b)
+		return true
+	})
+}
