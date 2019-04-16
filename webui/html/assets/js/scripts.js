@@ -102,7 +102,7 @@
         height: 'auto'
     });
     $('.nofity-list').slimScroll({
-        height: '435px'
+        height: '340px'
     });
     $('.timeline-area').slimScroll({
         height: '400px'

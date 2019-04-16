@@ -75,7 +75,7 @@
             <!-- sales report area start -->
             <div class="sales-report-area mt-5">
                 <div class="row">
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <div class="single-report mb-xs-30" style="height: 363px;">
                             <div class="s-report-inner pr--20 pt--30">
                                 <div class="icon"><i class="fa fa-btc"></i></div>
@@ -96,7 +96,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <!--<div class="col-md-4">
                         <div class="single-report mb-xs-30">
                             <div class="s-report-inner pr--20 pt--30 mb-3">
                                 <div class="icon"><i class="fa fa-link"></i></div>
@@ -136,6 +136,7 @@
 
                         </div>
                     </div>
+                    -->
                     <!--
                     <div class="col-md-4">
                         <div class="single-report mb-xs-30">
@@ -163,7 +164,7 @@
                             </div>
                         </div>
                     </div> -->
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <div class="card" style="border-radius: 0px;height: 363px;">
                             <div class="card-body">
                                 <h4 class="header-title">创建交易</h4>
@@ -189,7 +190,7 @@
             </div>
             <!-- sales report area end -->
 
-            <div class="row mt-5">
+            <div class="row mt-5" id="blocks-list-row">
 
                 <!-- timeline area start -->
                 <div class="col-lg-3">
@@ -361,7 +362,7 @@
             peers.append(`<a href="javascript:void(0)" class="notify-item">
                                 <div class="notify-text">
                                     <p>${peer.Addr}</p>
-                                    <span>${peer.LastActive}</span>
+                                    <span>上次通讯：${peer.LastActive}</span>
                                 </div>
                             </a>`);
         });

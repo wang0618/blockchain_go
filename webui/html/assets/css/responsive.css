@@ -359,17 +359,7 @@
         width: 49%;
         display: inline-block;
     }
-    .input-form input {
-        height: 70px;
-        padding-left: 20px;
-    }
-    .exchange-btn button {
-        height: 70px;
-    }
-    .input-form span {
-        height: 70px;
-        line-height: 70px;
-    }
+
     /* icons */
     .icon-container {
         flex-basis: calc(100% * (1/3));
