@@ -341,10 +341,16 @@
     var txlist = $('#tx_list');
     var txin_detail = $('#txin_detail');
     var txout_detail = $('#txout_detail');
-    var currTx = null;
+
+    var currActiveTx = null;
+    var currActiveBlockHeight = null;
 
     function update(data) {
         status_data = data;
+
+        if (currActiveBlockHeight == null){ // 第一次更新UI
+            currActiveBlockHeight = data.Blocks[0].Height;
+        }
 
         //更新当前节点地址
         $('#node-addr').text(data.NodeAddr);
@@ -374,7 +380,7 @@
         // 更新区块列表
         blocks.empty();
         $.each(data.Blocks, function (idx, b) {
-            blocks.append(`<div class="timeline-task blockitem" data-idx="${idx}">
+            blocks.append(`<div class="timeline-task blockitem ${currActiveBlockHeight==b.Height?'active' :''}" data-idx="${idx}" data-height="${b.Height}">
                                     <div class="icon bg1">
                                         ${b.Height}
                                     </div>
@@ -386,30 +392,36 @@
                                     </p>
                                 </div>`)
         });
+        $('.blockitem').click(function () {
+            var t = $(this);
+            currActiveBlockHeight = parseInt(t.data('height'));
+            $('.timeline-task.active').removeClass('active');
+            t.addClass('active');
+            update_tx_list(status_data.Blocks[parseInt(t.data('idx'))].Transactions);
+        });
 
         // 更新交易列表
         function update_tx_list(tx_list) {
-            currTx = tx_list;
+            currActiveTx = tx_list;
             txlist.empty();
             $.each(tx_list, function (idx, tx) {
-                txlist.append(`<li class="txitem" data-idx="${idx}">
+                txlist.append(`<li class="txitem ${idx==0?'active' :''}" data-idx="${idx}">
                                     <div class="icon l">${idx}</div>
                                     ${base64tohex(tx.ID)}
                                 </li>`);
             });
             $('.txitem').click(function () {
                 var t = $(this);
-                update_tx_detail(currTx[parseInt(t.data('idx'))]);
+                $('.txitem.active').removeClass('active');
+                t.addClass('active');
+                update_tx_detail(currActiveTx[parseInt(t.data('idx'))]);
             });
             update_tx_detail(tx_list[0])
         }
 
-        if (currTx == null)
+        if (currActiveTx == null)
             update_tx_list(data.Blocks[0].Transactions);
-        $('.blockitem').click(function () {
-            var t = $(this);
-            update_tx_list(data.Blocks[parseInt(t.data('idx'))].Transactions);
-        });
+
 
         // 更新交易详情
         function update_tx_detail(txinfo) {

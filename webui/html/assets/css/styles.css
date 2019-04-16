@@ -2888,7 +2888,7 @@ table.dataTable thead td {
     background-color: #f8f9fa
 }
 
-.timeline-task:active, #tx_list > li:active {
+.timeline-task:active,.timeline-task.active, #tx_list > li:active,#tx_list > li.active {
     color: #212529;
     background-color: #e9ecef
 }
