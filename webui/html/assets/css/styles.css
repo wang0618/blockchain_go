@@ -129,7 +129,7 @@
 }
 
 .menu-inner {
-    overflow-y: scroll;
+    overflow-y: auto;
     height: 100%;
 }
 
@@ -243,7 +243,7 @@
 }
 
 .horizontal-main-wrapper .container {
-    max-width: 1440px;
+    max-width: 1220px;
 }
 
 .horizontal-main-wrapper .header-area,
@@ -2849,7 +2849,7 @@ table.dataTable thead td {
     /*background-image: radial-gradient(rgba(0, 150, 0, 0.75), black 120%);*/
     /*height: 100vh;*/
     margin: 0;
-    overflow: scroll;
+    overflow: auto;
     padding: 1rem;
     color: white;
     font: 1rem Inconsolata, monospace;
@@ -2888,7 +2888,7 @@ table.dataTable thead td {
     background-color: #f8f9fa
 }
 
-.timeline-task:active, #tx_list > li:active {
+.timeline-task:active, .timeline-task.active, #tx_list > li:active, #tx_list > li.active {
     color: #212529;
     background-color: #e9ecef
 }
@@ -2901,15 +2901,39 @@ table.dataTable thead td {
 
 @media (max-width: 1199px) and (min-width: 992px) {
     .exchange-btn button {
-        margin-top: 20% !important;
+        /*margin-top: 20% !important;*/
     }
 }
 
-.dbkit-table td{
+.dbkit-table td {
     padding-right: 10px;
-    min-width: 50px!important;
+    min-width: 50px !important;
 }
 
 table.dbkit-table tr td {
     font: 1rem Inconsolata, monospace;
+}
+
+.notify-box {
+    width: 250px;
+}
+
+.notify-title {
+    padding: 14px 30px;
+}
+
+@media (max-width: 991px) and (min-width: 400px) {
+    .cripto-live ul li {
+        width: 100% !important;
+        display: block !important;
+    }
+    #blocks-list-row>div:not(:last-child){
+        margin-bottom: 40px;
+    }
+}
+
+@media screen and (max-width: 1440px) and (min-width: 1200px){
+    .exhcange-rate {
+        padding: 38px!important;
+    }
 }

@@ -177,7 +177,9 @@ func (u UTXOSet) Reindex() {
 	})
 }
 
-func updateTx(b *bolt.Bucket, tx *transaction.Transaction) {
+// updateTx 根绝单个交易更新UTXO集，ignoreTXOutput表示是否忽略交易的输出，若为true，则不会把交易的输出加入到新的UTXO集合中
+// 本地发起交易后，交易还未确认时，需要先用交易更新本地UTXO，同时忽略交易的输出，否则下一次的交易可能会用到此交易的找零
+func updateTx(b *bolt.Bucket, tx *transaction.Transaction, ignoreTXOutput bool) {
 	// 删除交易输入的UTXO
 	if tx.IsCoinbase() == false {
 		for _, vin := range tx.Vin {
@@ -205,15 +207,16 @@ func updateTx(b *bolt.Bucket, tx *transaction.Transaction) {
 
 		}
 	}
-	// 新增新的UTXO
-	var newOutputs []UTXOItem
-	for idx, out := range tx.Vout {
-		newOutputs = append(newOutputs, UTXOItem{idx, out})
-	}
-
-	err := b.Put(tx.ID, SerializeUTXOItems(newOutputs))
-	if err != nil {
-		log.Panic(err)
+	if !ignoreTXOutput {
+		// 新增新的UTXO
+		var newOutputs []UTXOItem
+		for idx, out := range tx.Vout {
+			newOutputs = append(newOutputs, UTXOItem{idx, out})
+		}
+		err := b.Put(tx.ID, SerializeUTXOItems(newOutputs))
+		if err != nil {
+			log.Panic(err)
+		}
 	}
 }
 
@@ -226,7 +229,7 @@ func (u UTXOSet) Update(block *Block) {
 		b := dbtx.Bucket([]byte(utxoBucket))
 
 		for _, tx := range block.Transactions {
-			updateTx(b, tx)
+			updateTx(b, tx, false)
 		}
 
 		return nil
@@ -237,12 +240,12 @@ func (u UTXOSet) Update(block *Block) {
 }
 
 // UpdateForTx 根据交易更新UTXO
-func (u UTXOSet) UpdateForTx(tx *transaction.Transaction) {
+func (u UTXOSet) UpdateForTx(tx *transaction.Transaction, ignoreTXOutput bool) {
 	db := u.Blockchain.db
 
 	err := db.Update(func(dbtx *bolt.Tx) error {
 		b := dbtx.Bucket([]byte(utxoBucket))
-		updateTx(b, tx)
+		updateTx(b, tx, ignoreTXOutput)
 		return nil
 	})
 	if err != nil {
