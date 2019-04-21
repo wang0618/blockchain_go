@@ -43,3 +43,7 @@ Usage:
   startnode -miner ADDRESS - Start a node with ID specified in NODE_ID env. var. -miner enables mining
   creategenesisblock -delta SECOND - Create a genesis block which timestamp is now with given 区块生成间隔
 ```
+
+### Screenshot
+
+![Screenshot](https://user-images.githubusercontent.com/8682073/56465515-5a241500-6431-11e9-937d-44e675ac5c03.png)
