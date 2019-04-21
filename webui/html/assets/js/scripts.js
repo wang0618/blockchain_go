@@ -108,5 +108,13 @@
         height: '400px'
     });
 
+    $('#wallets').slimScroll({
+        height: '200px'
+    });
+
+    $('#tx_list').slimScroll({
+        height: '410px'
+    });
+
 
 })(jQuery);

@@ -129,7 +129,7 @@
 }
 
 .menu-inner {
-    overflow-y: scroll;
+    overflow-y: auto;
     height: 100%;
 }
 
@@ -243,7 +243,7 @@
 }
 
 .horizontal-main-wrapper .container {
-    max-width: 1440px;
+    max-width: 1220px;
 }
 
 .horizontal-main-wrapper .header-area,
@@ -2849,7 +2849,7 @@ table.dataTable thead td {
     /*background-image: radial-gradient(rgba(0, 150, 0, 0.75), black 120%);*/
     /*height: 100vh;*/
     margin: 0;
-    overflow: scroll;
+    overflow: auto;
     padding: 1rem;
     color: white;
     font: 1rem Inconsolata, monospace;
