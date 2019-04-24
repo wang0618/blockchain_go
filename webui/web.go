@@ -100,7 +100,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		}{Addr: address, Balance: balance})
 	}
 	sort.Slice(res.Wallet, func(i, j int) bool {
-		return res.Wallet[i].Balance > res.Wallet[j].Balance
+		return res.Wallet[i].Balance > res.Wallet[j].Balance || (res.Wallet[i].Balance == res.Wallet[j].Balance && res.Wallet[i].Addr >= res.Wallet[j].Addr)
 	})
 
 	for addr, st := range net.GetActivePeers() {
