@@ -40,7 +40,7 @@ Usage:
   printchain - Print all the blocks of the blockchain
   reindexutxo - Rebuilds the UTXO set
   send -from FROM -to TO -amount AMOUNT -mine - Send AMOUNT of coins from FROM address to TO. Mine on the same node, when -mine is set.
-  startnode -miner ADDRESS - Start a node with ID specified in NODE_ID env. var. -miner enables mining
+  startnode -miner ADDRESS - Start a node with ID specified in NODE_ID env. var. -miner enables mining, var. -webui enables Web UI
   creategenesisblock -delta SECOND - Create a genesis block which timestamp is now with given 区块生成间隔
 ```
 

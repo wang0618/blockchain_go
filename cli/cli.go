@@ -19,7 +19,7 @@ func (cli *CLI) printUsage() {
 	fmt.Println("  printchain - Print all the blocks of the blockchain")
 	fmt.Println("  reindexutxo - Rebuilds the UTXO set")
 	fmt.Println("  send -from FROM -to TO -amount AMOUNT -mine - Send AMOUNT of coins from FROM address to TO. Mine on the same node, when -mine is set.")
-	fmt.Println("  startnode -miner ADDRESS - Start a node with ID specified in NODE_ID env. var. -miner enables mining")
+	fmt.Println("  startnode -miner ADDRESS -webui - Start a node with ID specified in NODE_ID env. var. -miner enables mining, var. -webui enables Web UI")
 	fmt.Println("  creategenesisblock -delta SECOND - Create a genesis block which timestamp is now with given 区块生成间隔")
 }
 
