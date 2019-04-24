@@ -9,7 +9,7 @@
         // ws;
 
         (function () {
-            ws = new WebSocket("ws:\/\/127.0.0.1:65500\/log");
+            ws = new WebSocket("ws://"+window.location.host+"/log");
             ws.onopen = function (evt) {
                 print("Websocket OPEN\n");
             };
