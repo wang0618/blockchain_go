@@ -159,7 +159,6 @@ func sendHandler(w http.ResponseWriter, r *http.Request) {
 	wallet_ := wallets.GetWallet(from)
 
 	tx := wallet.NewUTXOTransaction(&wallet_, to, amount, &UTXOSet)
-
 	UTXOSet.UpdateForTx(tx, true)
 
 	net.BroadcastTx(tx)

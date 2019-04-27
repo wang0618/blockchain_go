@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 
 	"blockchain_go/transaction"
 )
@@ -47,4 +48,47 @@ func NewUTXOTransaction(wallet_ *Wallet, to string, amount int, UTXOSet *blockch
 	UTXOSet.Blockchain.SignTransaction(&tx, wallet_.PrivateKey)
 
 	return &tx
+}
+
+// NewUTXOTransactionByWallets creates a new transaction from node wallets
+func NewUTXOTransactionByWallets(wallets *Wallets, to string, amount int, UTXOSet *blockchain.UTXOSet) []*transaction.Transaction {
+	transactionSet := make([]*transaction.Transaction, 0)
+	// 查看wallets余额是否充足
+	totalBalance := 0
+	walletCount := 0
+	balance := make([]string, 0)
+	for address := range wallets.Wallets {
+		balance = append(balance, address)
+		walletBalance := UTXOSet.GetAddressBalance(address)
+		totalBalance += walletBalance
+		walletCount += 1
+		if totalBalance >= amount {
+			break
+		}
+	}
+
+	if totalBalance < amount {
+		log.Panic("ERROR: Not enough funds")
+	}
+
+	index := 0
+	// 构造交易
+	for address, wallet := range wallets.Wallets {
+		amount -= UTXOSet.GetAddressBalance(address)
+		// 去除余额为零的wallet
+		if UTXOSet.GetAddressBalance(address) == 0 || strings.Compare(address, to) == 0 {
+			index++
+			continue
+		}
+
+		if amount <= 0 {
+			transactionSet = append(transactionSet, NewUTXOTransaction(wallet, to, amount+UTXOSet.GetAddressBalance(address), UTXOSet))
+			break
+		} else {
+			transactionSet = append(transactionSet, NewUTXOTransaction(wallet, to, UTXOSet.GetAddressBalance(address), UTXOSet))
+		}
+		index++
+	}
+
+	return transactionSet
 }

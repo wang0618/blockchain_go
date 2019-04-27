@@ -28,12 +28,21 @@ func NewWallets(nodeID string) (*Wallets, error) {
 }
 
 // CreateWallet adds a Wallet to Wallets
-func (ws *Wallets) CreateWallet() string {
-	wallet := NewWallet()
+func (ws *Wallets) CreateWallet() (string, []string) {
+	wallet, mnemonicCode := NewWallet()
 	address := fmt.Sprintf("%s", wallet.GetAddress())
 
 	ws.Wallets[address] = wallet
 
+	return address, mnemonicCode
+}
+
+// RecoverWallet gen a wallet by mnemonic code
+func (ws *Wallets) RecoverWallet(memCode []string) string {
+	wallet := genKeyPairByMnemonicCode(memCode)
+	address := fmt.Sprintf("%s", wallet.GetAddress())
+
+	ws.Wallets[address] = wallet
 	return address
 }
 

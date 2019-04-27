@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
-
 	"os"
+	"strings"
 )
 
 // CLI responsible for processing command line arguments
@@ -14,6 +14,7 @@ type CLI struct{}
 func (cli *CLI) printUsage() {
 	fmt.Println("Usage:")
 	fmt.Println("  createwallet - Generates a new key-pair and saves it into the wallet file")
+	fmt.Println("  recoverwallet - recover wallet via mnemonic code and saves it into the wallet file")
 	fmt.Println("  getbalance -address ADDRESS - Get balance of ADDRESS")
 	fmt.Println("  listaddresses - Lists all addresses from the wallet file")
 	fmt.Println("  printchain - Print all the blocks of the blockchain")
@@ -43,6 +44,7 @@ func (cli *CLI) Run() {
 	getBalanceCmd := flag.NewFlagSet("getbalance", flag.ExitOnError)
 	createWalletCmd := flag.NewFlagSet("createwallet", flag.ExitOnError)
 	listAddressesCmd := flag.NewFlagSet("listaddresses", flag.ExitOnError)
+	recoverWalletCmd := flag.NewFlagSet("recoverwallet", flag.ExitOnError)
 	printChainCmd := flag.NewFlagSet("printchain", flag.ExitOnError)
 	reindexUTXOCmd := flag.NewFlagSet("reindexutxo", flag.ExitOnError)
 	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
@@ -71,6 +73,11 @@ func (cli *CLI) Run() {
 		}
 	case "listaddresses":
 		err := listAddressesCmd.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
+	case "recoverwallet":
+		err := recoverWalletCmd.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
 		}
@@ -115,6 +122,12 @@ func (cli *CLI) Run() {
 
 	if createWalletCmd.Parsed() {
 		cli.createWallet(nodeID)
+	}
+
+	if recoverWalletCmd.Parsed() {
+		memonicCode := recoverWalletCmd.Args()
+		//fmt.Println(memonicCode[0])
+		cli.recoverWallet(strings.Split(memonicCode[0], ","), nodeID)
 	}
 
 	if listAddressesCmd.Parsed() {
