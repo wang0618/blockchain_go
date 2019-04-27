@@ -97,6 +97,19 @@ func newSeedAndKeyPair() (ecdsa.PrivateKey, []byte, []string) {
 	return *private, pubKey, mnemonicCode
 }
 
+// genKeyPairByMnemonicCode 通过助记词还原一个公私钥对
+func genKeyPairByMnemonicCode(memCode []string) *Wallet {
+	curve := elliptic.P256()
+	seed := genSeedByMemeoryCode(memCode)
+	private, err := ecdsa.GenerateKey(curve, strings.NewReader(seed.String()+seed.String()))
+	if err != nil {
+		log.Panic(err)
+	}
+	pubKey := append(private.PublicKey.X.Bytes(), private.PublicKey.Y.Bytes()...)
+	wallet := Wallet{*private, pubKey}
+	return &wallet
+}
+
 // genSeedByMemeoryCode 根据助记词来生成种子
 func genSeedByMemeoryCode(memCode []string) *big.Int {
 	var memCodeArr = initMemCodeArray()
@@ -110,8 +123,19 @@ func genSeedByMemeoryCode(memCode []string) *big.Int {
 			}
 		}
 	}
+	//通过验证和，检查助记词是否合法
+	sha256H := sha256.New()
+	sha256H.Reset()
+	sha256H.Write(seedArray[0:8])
+	seedHash := sha256H.Sum(nil)
+
 	seed := new(big.Int)
-	seed.SetBytes(seedArray[0:8])
+	if bytes.Equal(seedHash[0:1], seedArray[8:9]) {
+		seed.SetBytes(seedArray[0:8])
+	} else {
+		fmt.Println("Invalid mnemonic code!")
+		seed = big.NewInt(0)
+	}
 	return seed
 }
 

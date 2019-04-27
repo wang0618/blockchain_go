@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"blockchain_go/utils"
 	"bytes"
 	"encoding/gob"
 	"encoding/hex"
@@ -82,6 +83,19 @@ func (u UTXOSet) FindSpendableOutputs(pubkeyHash []byte, amount int) (int, map[s
 	}
 
 	return accumulated, unspentOutputs
+}
+
+// GetAddressBalance get one address balance
+func (u UTXOSet) GetAddressBalance(address string) int {
+	balance := 0
+	pubKeyHash := utils.Base58Decode([]byte(address))
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
+	UTXOs := u.FindUTXO(pubKeyHash)
+
+	for _, out := range UTXOs {
+		balance += out.Value
+	}
+	return balance
 }
 
 // FindUTXO finds UTXO for a public key hash

@@ -37,6 +37,15 @@ func (ws *Wallets) CreateWallet() (string, []string) {
 	return address, mnemonicCode
 }
 
+// RecoverWallet gen a wallet by mnemonic code
+func (ws *Wallets) RecoverWallet(memCode []string) string {
+	wallet := genKeyPairByMnemonicCode(memCode)
+	address := fmt.Sprintf("%s", wallet.GetAddress())
+
+	ws.Wallets[address] = wallet
+	return address
+}
+
 // GetAddresses returns an array of addresses stored in the wallet file
 func (ws *Wallets) GetAddresses() []string {
 	var addresses []string
