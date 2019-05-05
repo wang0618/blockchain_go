@@ -156,6 +156,10 @@ func StartServer(nodeID, minerAddress string) {
 
 	go connnectionCheck(bc)
 
+	if len(miningAddress) > 0 {
+		go minningBlock(bc)
+	}
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {

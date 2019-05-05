@@ -24,6 +24,10 @@ const maxInvBlockHash = 32
 //var delayVersionPayload = map[string]*version{}
 var delayVersionPayload = sync.Map{}
 
+var ch = make(chan bool)
+
+var firstMine = true
+
 /*
 From https://en.bitcoin.it/wiki/Version_Handshake
 ## Version Handshake
@@ -301,47 +305,105 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 		return true
 	})
 
-	// 矿工节使用交易挖矿
-	if len(mempool) >= 2 && len(miningAddress) > 0 {
-	MineTransactions:
-		var txs []*transaction.Transaction
+	if len(mempool) >= 2 {
+		ch <- true
+	} else {
+		ch <- false
+	}
+	/*
+		// 矿工节使用交易挖矿
+		if len(mempool) >= 2 && len(miningAddress) > 0 {
+		MineTransactions:
+			var txs []*transaction.Transaction
 
-		for id := range mempool {
-			tx := mempool[id]
-			if bc.VerifyTransactionSig(&tx) {
-				txs = append(txs, &tx)
+			for id := range mempool {
+				tx := mempool[id]
+				if bc.VerifyTransactionSig(&tx) {
+					txs = append(txs, &tx)
+				}
+			}
+
+			if len(txs) == 0 {
+				log.Net.Println("All transactions are invalid! Waiting for new ones...")
+				return
+			}
+
+			cbTx := transaction.NewCoinbaseTX(miningAddress, "")
+			txs = append(txs, cbTx)
+			txs[0], txs[len(txs)-1] = txs[len(txs)-1], txs[0] // move coinbase tx first
+
+			newBlock := miner.MineBlock(bc, txs)
+			UTXOSet := blockchain.UTXOSet{bc}
+			UTXOSet.Reindex()
+
+			log.Net.Println("New block is mined!")
+
+			for _, tx := range txs {
+				txID := hex.EncodeToString(tx.ID)
+				delete(mempool, txID)
+			}
+
+			activePeers.Range(func(addr, value interface{}) bool {
+				sendInv(addr.(string), "block", [][]byte{newBlock.Hash})
+				return true
+			})
+
+			if len(mempool) > 0 {
+				goto MineTransactions
 			}
 		}
+	*/
+}
 
-		if len(txs) == 0 {
-			log.Net.Println("All transactions are invalid! Waiting for new ones...")
-			return
-		}
+//添加挖矿线程函数
+func minningBlock(bc *blockchain.Blockchain) {
 
-		cbTx := transaction.NewCoinbaseTX(miningAddress, "")
-		txs = append(txs, cbTx)
-		txs[0], txs[len(txs)-1] = txs[len(txs)-1], txs[0] // move coinbase tx first
+	for {
+		startMine := <-ch
+		if startMine == true { //开始挖矿
+			firstMine = true
+			var txs []*transaction.Transaction
 
-		newBlock := miner.MineBlock(bc, txs)
-		UTXOSet := blockchain.UTXOSet{bc}
-		UTXOSet.Reindex()
+			for id := range mempool {
+				tx := mempool[id]
+				if bc.VerifyTransactionSig(&tx) {
+					txs = append(txs, &tx)
+				}
+			}
 
-		log.Net.Println("New block is mined!")
+			if len(txs) == 0 {
+				log.Net.Println("All transactions are invalid! Waiting for new ones...")
+				continue
+			}
 
-		for _, tx := range txs {
-			txID := hex.EncodeToString(tx.ID)
-			delete(mempool, txID)
-		}
+			cbTx := transaction.NewCoinbaseTX(miningAddress, "")
+			txs = append(txs, cbTx)
+			txs[0], txs[len(txs)-1] = txs[len(txs)-1], txs[0] // move coinbase tx first
 
-		activePeers.Range(func(addr, value interface{}) bool {
-			sendInv(addr.(string), "block", [][]byte{newBlock.Hash})
-			return true
-		})
+			newBlock := miner.MineBlock(bc, txs)
 
-		if len(mempool) > 0 {
-			goto MineTransactions
+			for _, tx := range txs {
+				txID := hex.EncodeToString(tx.ID)
+				delete(mempool, txID)
+			}
+
+			if firstMine == false { //考虑不同的挖矿节点t同时挖矿，第一个生成区块的旷工节点具有记账权，其他矿工挖出的区块无效
+				firstMine = true
+				continue
+			}
+
+			UTXOSet := blockchain.UTXOSet{bc}
+			UTXOSet.Reindex()
+
+			log.Net.Println("New block is mined!")
+
+			activePeers.Range(func(addr, value interface{}) bool {
+				sendInv(addr.(string), "block", [][]byte{newBlock.Hash})
+				return true
+			})
 		}
 	}
+
 }
 
 /*
