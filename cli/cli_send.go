@@ -6,6 +6,7 @@ import (
 	"blockchain_go/net"
 	"blockchain_go/transaction"
 	w "blockchain_go/wallet"
+	"encoding/hex"
 	"fmt"
 	"log"
 )
@@ -34,7 +35,7 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 		cbTx := transaction.NewCoinbaseTX(from, "")
 		txs := []*transaction.Transaction{cbTx, tx}
 
-		newBlock := miner.MineBlock(bc, txs)
+		newBlock := miner.MineBlock(bc, txs, map[string]transaction.Transaction{hex.EncodeToString(tx.ID): *tx})
 		UTXOSet.Update(newBlock)
 	} else {
 		net.SendTx(net.CenterNode, tx)

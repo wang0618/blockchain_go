@@ -156,7 +156,13 @@ func (bc *Blockchain) AddBlock(block *Block) {
 }
 
 // FindTransaction finds a transaction by its ID
-func (bc *Blockchain) FindTransaction(ID []byte) (transaction.Transaction, error) {
+func (bc *Blockchain) FindTransaction(ID []byte, mempool map[string]transaction.Transaction) (transaction.Transaction, error) {
+
+	prevTX, ok := mempool[hex.EncodeToString(ID)]
+	if ok {
+		return prevTX, nil
+	}
+
 	bci := bc.Iterator()
 
 	for {
@@ -299,11 +305,11 @@ func (bc *Blockchain) GetCurrentDifficult() []byte {
 }
 
 // SignTransaction signs inputs of a Transaction
-func (bc *Blockchain) SignTransaction(tx *transaction.Transaction, privKey ecdsa.PrivateKey) {
+func (bc *Blockchain) SignTransaction(tx *transaction.Transaction, privKey ecdsa.PrivateKey, mempool map[string]transaction.Transaction) {
 	prevTXs := make(map[string]transaction.Transaction)
 
 	for _, vin := range tx.Vin {
-		prevTX, err := bc.FindTransaction(vin.Txid)
+		prevTX, err := bc.FindTransaction(vin.Txid, mempool)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -316,7 +322,7 @@ func (bc *Blockchain) SignTransaction(tx *transaction.Transaction, privKey ecdsa
 // VerifyTransaction verifies transaction input signatures
 // 仅校验了签名，没有检测是否双花
 // TODO 失败时返回具体错误原因
-func (bc *Blockchain) VerifyTransactionSig(tx *transaction.Transaction) bool {
+func (bc *Blockchain) VerifyTransactionSig(tx *transaction.Transaction, mempool map[string]transaction.Transaction) bool {
 	if tx.IsCoinbase() {
 		return true
 	}
@@ -324,7 +330,7 @@ func (bc *Blockchain) VerifyTransactionSig(tx *transaction.Transaction) bool {
 	prevTXs := make(map[string]transaction.Transaction)
 
 	for _, vin := range tx.Vin {
-		prevTX, err := bc.FindTransaction(vin.Txid)
+		prevTX, err := bc.FindTransaction(vin.Txid, mempool)
 		if err != nil {
 			log.Panic(err)
 		}

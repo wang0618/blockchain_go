@@ -17,7 +17,7 @@ var IBDSyncNodeAddr = ""
 // 正在下载中的区块hash列表
 var blocksInTransit = [][]byte{}
 
-var mempool = make(map[string]transaction.Transaction)
+var MemPool = make(map[string]transaction.Transaction)
 
 const maxInvBlockHash = 32
 
@@ -175,7 +175,7 @@ func (payload *inv) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 	if payload.Type == "tx" {
 		txID := payload.Items[0]
 
-		if mempool[hex.EncodeToString(txID)].ID == nil {
+		if MemPool[hex.EncodeToString(txID)].ID == nil {
 			sendGetData(fromAddr, "tx", txID)
 		}
 	}
@@ -204,7 +204,7 @@ func (payload *getdata) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
 	if payload.Type == "tx" {
 		txID := hex.EncodeToString(payload.ID)
-		tx := mempool[txID]
+		tx := MemPool[txID]
 
 		SendTx(fromAddr, &tx)
 	}
@@ -286,12 +286,12 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 		return
 	}
 
-	_, exist := mempool[hex.EncodeToString(tx.ID)]
+	_, exist := MemPool[hex.EncodeToString(tx.ID)]
 	if exist {
 		return
 	}
 
-	mempool[hex.EncodeToString(tx.ID)] = tx
+	MemPool[hex.EncodeToString(tx.ID)] = tx
 
 	// 向其他节点广播交易消息
 	activePeers.Range(func(addr, value interface{}) bool {
@@ -302,13 +302,13 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 	})
 
 	// 矿工节使用交易挖矿
-	if len(mempool) >= 2 && len(miningAddress) > 0 {
+	if len(MemPool) >= 2 && len(miningAddress) > 0 {
 	MineTransactions:
 		var txs []*transaction.Transaction
 
-		for id := range mempool {
-			tx := mempool[id]
-			if bc.VerifyTransactionSig(&tx) {
+		for id := range MemPool {
+			tx := MemPool[id]
+			if bc.VerifyTransactionSig(&tx, MemPool) {
 				txs = append(txs, &tx)
 			}
 		}
@@ -322,7 +322,7 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 		txs = append(txs, cbTx)
 		txs[0], txs[len(txs)-1] = txs[len(txs)-1], txs[0] // move coinbase tx first
 
-		newBlock := miner.MineBlock(bc, txs)
+		newBlock := miner.MineBlock(bc, txs, MemPool)
 		UTXOSet := blockchain.UTXOSet{bc}
 		UTXOSet.Reindex()
 
@@ -330,7 +330,7 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 
 		for _, tx := range txs {
 			txID := hex.EncodeToString(tx.ID)
-			delete(mempool, txID)
+			delete(MemPool, txID)
 		}
 
 		activePeers.Range(func(addr, value interface{}) bool {
@@ -338,7 +338,7 @@ func (payload *tx) handleMsg(bc *blockchain.Blockchain, fromAddr string) {
 			return true
 		})
 
-		if len(mempool) > 0 {
+		if len(MemPool) > 0 {
 			goto MineTransactions
 		}
 	}

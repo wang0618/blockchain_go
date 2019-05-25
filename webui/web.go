@@ -6,6 +6,7 @@ import (
 	"blockchain_go/net"
 	"blockchain_go/utils"
 	"blockchain_go/wallet"
+	"encoding/hex"
 	"encoding/json"
 	"github.com/gorilla/websocket"
 	olog "log"
@@ -160,7 +161,8 @@ func sendHandler(w http.ResponseWriter, r *http.Request) {
 
 	tx := wallet.NewUTXOTransaction(&wallet_, to, amount, &UTXOSet)
 
-	UTXOSet.UpdateForTx(tx, true)
+	UTXOSet.UpdateForTx(tx, false)
+	net.MemPool[hex.EncodeToString(tx.ID)] = *tx
 
 	net.BroadcastTx(tx)
 	if err != nil {

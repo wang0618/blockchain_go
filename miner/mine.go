@@ -7,13 +7,13 @@ import (
 )
 
 // MineBlock mines a new block with the provided transactions
-func MineBlock(bc *blockchain.Blockchain, transactions []*transaction.Transaction) *blockchain.Block {
+func MineBlock(bc *blockchain.Blockchain, transactions []*transaction.Transaction, mempool map[string]transaction.Transaction) *blockchain.Block {
 	var lastHash []byte
 	var lastHeight int
 
 	for _, tx := range transactions {
 		// TODO: ignore transaction if it's not valid
-		if bc.VerifyTransactionSig(tx) != true {
+		if bc.VerifyTransactionSig(tx, mempool) != true {
 			log.Panic("ERROR: Invalid transaction")
 		}
 	}

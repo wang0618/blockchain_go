@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"blockchain_go/blockchain"
+	"blockchain_go/net"
 	"blockchain_go/utils"
 	"encoding/hex"
 	"fmt"
@@ -44,7 +45,7 @@ func NewUTXOTransaction(wallet_ *Wallet, to string, amount int, UTXOSet *blockch
 
 	tx := transaction.Transaction{nil, inputs, outputs}
 	tx.ID = tx.Hash()
-	UTXOSet.Blockchain.SignTransaction(&tx, wallet_.PrivateKey)
+	UTXOSet.Blockchain.SignTransaction(&tx, wallet_.PrivateKey, net.MemPool)
 
 	return &tx
 }
