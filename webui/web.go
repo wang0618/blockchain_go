@@ -8,6 +8,7 @@ import (
 	"blockchain_go/wallet"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/gorilla/websocket"
 	olog "log"
 	"net/http"
@@ -22,11 +23,20 @@ type msg struct {
 }
 
 const maxBlocksCount = 10 // 一次最大允许返回的区块数量
-const webUIAddr = "127.0.0.1:65500"
+var webUIAddr string;
 
 var nodeID string
 
 var upgrader = websocket.Upgrader{} // use default options
+
+func init() {
+	port, err := utils.GetAvailablePort()
+	if err != nil {
+		olog.Panic("upgrade:", err)
+	}
+	webUIAddr = fmt.Sprintf("127.0.0.1:%d", port)
+
+}
 
 func StartWebUIServer(htmlPath string, nodeId_ string) {
 	nodeID = nodeId_

@@ -10,8 +10,10 @@ import (
 	"golang.org/x/crypto/ripemd160"
 	"log"
 	"math/big"
+	"net"
 	"os/exec"
 	"runtime"
+	"strconv"
 )
 
 // IntToHex converts an int64 to a byte array
@@ -109,4 +111,22 @@ func OpenBrowser(url string) bool {
 	}
 	cmd := exec.Command(args[0], append(args[1:], url)...)
 	return cmd.Start() == nil
+}
+
+
+// GetAvailablePort获取一个可用的监听端口端口.
+func GetAvailablePort() (port int, err error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer listener.Close()
+
+	addr := listener.Addr().String()
+	_, portString, err := net.SplitHostPort(addr)
+	if err != nil {
+		return 0, err
+	}
+
+	return strconv.Atoi(portString)
 }
