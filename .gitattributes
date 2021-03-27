@@ -1,4 +1,6 @@
-
 # https://github.com/github/linguist#overrides
 
-webui/html/assets/* linguist-vendored
+webui/html/assets/css/* linguist-vendored
+webui/html/assets/font/* linguist-vendored
+webui/html/assets/js/* linguist-vendored
+webui/html/assets/js/vendor/* linguist-vendored
